@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pastry Studio</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0e0b08; font-family: sans-serif; color: #f0e6d3; min-height: 100vh; }
+    select, input { background: rgba(255,255,255,0.04); border: 1px solid rgba(200,150,62,0.25); border-radius: 8px; color: #f0e6d3; font-size: 13px; padding: 11px 14px; width: 100%; margin-bottom: 16px; }
+    select option { background: #1a1409; }
+    button { width: 100%; padding: 14px; background: linear-gradient(135deg,#c8963e,#e8b86d); border: none; border-radius: 10px; color: #0e0b08; font-weight: 700; font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; margin-bottom: 24px; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #c8963e; margin-bottom: 6px; display: block; }
+    .header { background: #1c1710; padding: 20px 32px; border-bottom: 1px solid rgba(200,150,62,0.2); margin-bottom: 40px; }
+    .logo { font-size: 22px; font-weight: 700; color: #c8963e; }
+    .tag { font-size: 11px; letter-spacing: 2px; color: rgba(200,150,62,0.6); text-transform: uppercase; }
+    .main { max-width: 700px; margin: 0 auto; padding: 0 20px; }
+    .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(200,150,62,0.2); border-radius: 14px; padding: 32px; margin-top: 24px; }
+    .recipe-title { font-size: 26px; font-weight: 700; margin-bottom: 6px; }
+    .recipe-tag { font-style: italic; color: rgba(240,230,211,0.5); font-size: 14px; margin-bottom: 20px; }
+    .meta { display: flex; gap: 20px; padding: 14px 0; border-top: 1px solid rgba(200,150,62,0.15); border-bottom: 1px solid rgba(200,150,62,0.15); margin-bottom: 24px; flex-wrap: wrap; }
+    .meta-label { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: #c8963e; display: block; margin-bottom: 3px; }
+    .section-title { font-size: 16px; font-style: italic; color: #c8963e; margin: 20px 0 12px; }
+    ul, ol { padding-left: 20px; }
+    li { font-size: 13px; color: rgba(240,230,211,0.85); margin-bottom: 7px; line-height: 1.6; }
+    .tip { background: rgba(200,150,62,0.06); border-left: 2px solid #c8963e; border-radius: 0 8px 8px 0; padding: 14px 18px; margin-top: 20px; font-size: 13px; color: rgba(240,230,211,0.75); }
+    .actions { display: flex; gap: 10px; margin-top: 24px; }
+    .btn-sec { flex: 1; padding: 11px; background: transparent; border: 1px solid rgba(200,150,62,0.3); border-radius: 8px; color: #c8963e; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; width: auto; margin: 0; }
+    .error { background: rgba(220,60,60,0.08); border: 1px solid rgba(220,60,60,0.2); border-radius: 8px; padding: 14px; color: rgba(240,150,150,0.9); font-size: 13px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState } = React;
+    const API_KEY = "METS-TA-CLÉ-ICI";
+    const DEVICES = ["Thermomix TM6","Thermomix TM5","KitchenAid","Kenwood Chef","Monsieur Cuisine","Four classique","Manuel"];
+    const LEVELS  = ["Débutant","Intermédiaire","Expert","Chef professionnel"];
+    const DIETS   = ["Aucune restriction","Sans gluten","Vegan","Sans lactose","Sans sucre","Halal"];
+    const CATS    = ["Gâteau","Tarte","Viennoiserie","Biscuit","Entremet","Chocolat","Glacé"];
+
+    function App() {
+      const [form, setForm] = useState({ category:"Gâteau", device:"Thermomix TM6", level:"Intermédiaire", diet:"Aucune restriction", servings:"8", style:"" });
+      const [loading, setLoading] = useState(false);
+      const [recipe, setRecipe] = useState(null);
+      const [error, setError] = useState("");
+      const set = (k,v) => setForm(f=>({...f,[k]:v}));
+
+      const generate = async () => {
+        setLoading(true); setError(""); setRecipe(null);
+        const prompt = `Tu es un chef pâtissier étoilé. Génère une recette de ${form.category} pour ${form.servings} personnes. Appareil: ${form.device}. Niveau: ${form.level}. Régime: ${form.diet}. ${form.style ? "Style: "+form.style : ""} Réponds UNIQUEMENT en JSON sans backticks: {"name":"...","tagline":"...","prepTime":"...","cookTime":"...","difficulty":"...","ingredients":["..."],"steps":["..."],"chefTip":"..."}`;
+        try {
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method:"POST",
+            headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01"},
+            body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+          });
+          const data = await res.json();
+          const text = data.content?.map(b=>b.text||"").join("")||"";
+          setRecipe(JSON.parse(text.replace(/```json|```/g,"").trim()));
+        } catch(e) {
+          setError("Erreur. Vérifie ta clé API et réessaie.");
+        } finally { setLoading(false); }
+      };
+
+      const printPDF = () => {
+        if (!recipe) return;
+        const w = window.open("","_blank");
+        w.document.write(`<html><head><title>${recipe.name}</title><style>body{font-family:sans-serif;max-width:600px;margin:40px auto;padding:0 20px;color:#222}h1{font-size:2rem;margin-bottom:6px}p.tag{color:#888;font-style:italic;margin-bottom:20px}h2{color:#c8963e;margin:20px 0 10px}ul,ol{padding-left:20px}li{margin-bottom:6px;line-height:1.6}.tip{background:#fdf8f2;border-left:3px solid #c8963e;padding:12px 16px;margin-top:20px;font-size:13px}</style></head><body><h1>${recipe.name}</h1><p class="tag">${recipe.tagline||""}</p><p><strong>Prép:</strong> ${recipe.prepTime} | <strong>Cuisson:</strong> ${recipe.cookTime} | <strong>Portions:</strong> ${form.servings} pers.</p><h2>Ingrédients</h2><ul>${(recipe.ingredients||[]).map(i=>"<li>"+i+"</li>").join("")}</ul><h2>Préparation</h2><ol>${(recipe.steps||[]).map(s=>"<li>"+s+"</li>").join("")}</ol>${recipe.chefTip?"<div class='tip'><strong>Astuce chef:</strong> "+recipe.chefTip+"</div>":""}<script>window.onload=()=>window.print()<\/script></body></html>`);
+        w.document.close();
+      };
+
+      return (
+        <div>
+          <div className="header">
+            <div className="logo">✦ Pastry Studio</div>
+            <div className="tag">Générateur de recettes IA</div>
+          </div>
+          <div className="main">
+            {[["Catégorie",CATS,"category"],["Appareil",DEVICES,"device"],["Niveau",LEVELS,"level"],["Régime",DIETS,"diet"]].map(([label,opts,key])=>(
+              <div key={key}>
+                <span className="label">{label}</span>
+                <select value={form[key]} onChange={e=>set(key,e.target.value)}>
+                  {opts.map(o=><option key={o}>{o}</option>)}
+                </select>
+              </div>
+            ))}
+            <span className="label">Portions</span>
+            <input type="number" value={form.servings} onChange={e=>set("servings",e.target.value)} />
+            <span className="label">Style / Inspiration</span>
+            <input type="text" value={form.style} onChange={e=>set("style",e.target.value)} placeholder="Ex: japonais, fruité..." />
+            <button onClick={generate} disabled={loading}>{loading?"Génération...":"✦ Générer la recette"}</button>
+            {error && <div className="error">{error}</div>}
+            {recipe && (
+              <div className="card">
+                <div className="recipe-title">{recipe.name}</div>
+                <div className="recipe-tag">{recipe.tagline}</div>
+                <div className="meta">
+                  {[["Préparation",recipe.prepTime],["Cuisson",recipe.cookTime],["Difficulté",recipe.difficulty],["Portions",form.servings+" pers."]].map(([k,v])=>(
+                    <div key={k}><span className="meta-label">{k}</span><span>{v}</span></div>
+                  ))}
+                </div>
+                <div className="section-title">Ingrédients</div>
+                <ul>{(recipe.ingredients||[]).map((i,n)=><li key={n}>{i}</li>)}</ul>
+                <div className="section-title">Préparation</div>
+                <ol>{(recipe.steps||[]).map((s,n)=><li key={n}>{s}</li>)}</ol>
+                {recipe.chefTip && <div className="tip"><strong style={{color:"#c8963e"}}>✦ Astuce chef — </strong>{recipe.chefTip}</div>}
+                <div className="actions">
+                  <button className="btn-sec" onClick={printPDF}>↓ PDF</button>
+                  <button className="btn-sec" onClick={generate}>Nouvelle variante</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+    ReactDOM.render(<App />, document.getElementById("root"));
+  </script>
+</body>
+</html>
