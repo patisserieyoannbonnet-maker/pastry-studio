@@ -54,7 +54,7 @@
         setLoading(true); setError(""); setRecipe(null);
         const prompt = `Tu es un chef pâtissier étoilé. Génère une recette de ${form.category} pour ${form.servings} personnes. Appareil: ${form.device}. Niveau: ${form.level}. Régime: ${form.diet}. ${form.style ? "Style: "+form.style : ""} Réponds UNIQUEMENT en JSON sans backticks: {"name":"...","tagline":"...","prepTime":"...","cookTime":"...","difficulty":"...","ingredients":["..."],"steps":["..."],"chefTip":"..."}`;
         try {
-          const res = await fetch("https://api.anthropic.com/v1/messages", {
+          const res = await fetch("/api/generate", {
             method:"POST",
             headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01"},
             body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})
