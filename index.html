@@ -51,7 +51,7 @@
 
       const generate = async () => {
         setLoading(true); setError(""); setRecipe(null);
-        const prompt = `Tu es un chef pâtissier étoilé. Génère une recette de ${form.category} pour ${form.servings} personnes. Appareil: ${form.device}. Niveau: ${form.level}. Régime: ${form.diet}. ${form.style ? "Style: "+form.style : ""} Réponds UNIQUEMENT en JSON sans backticks: {"name":"...","tagline":"...","prepTime":"...","cookTime":"...","difficulty":"...","ingredients":["..."],"steps":["..."],"chefTip":"..."}`;
+        const prompt = `Tu es un chef pâtissier étoilé. Génère une recette de ${form.category} pour ${form.servings} personnes. Appareil: ${form.device}. Niveau: ${form.level}. Régime: ${form.diet}. ${form.style ? "Style: "+form.style : ""} N'utilise jamais de guillemets doubles dans les textes, utilise « » à la place. Réponds UNIQUEMENT en JSON sans backticks: {"name":"...","tagline":"...","prepTime":"...","cookTime":"...","difficulty":"...","ingredients":["..."],"steps":["..."],"chefTip":"..."}`;
         try {
           const res = await fetch("/api/generate", {
             method:"POST",
@@ -60,7 +60,7 @@
           });
           const data = await res.json(); if (data.error) throw new Error(data.error.message || "Erreur API");
           const text = data.content?.map(b=>b.text||"").join("")||"";
-          setRecipe(JSON.parse(text.replace(/```json|```/g,"").trim()));
+          setRecipe(JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}")+1)));
         } catch(e) {
           setError("Erreur : " + e.message);
         } finally { setLoading(false); }
