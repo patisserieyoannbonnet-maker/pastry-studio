@@ -56,9 +56,9 @@
           const res = await fetch("/api/generate", {
             method:"POST",
             headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({model:model:"claude-sonnet-5",max_tokens:4000,messages:[{role:"user",content:prompt}]})
+            body:JSON.stringify({model:"claude-sonnet-5",max_tokens:4000,messages:[{role:"user",content:prompt}]})
           });
-          const data = const data = await res.json(); if (data.error) throw new Error(data.error.message || "Erreur API");();
+          const data = await res.json(); if (data.error) throw new Error(data.error.message || "Erreur API");
           const text = data.content?.map(b=>b.text||"").join("")||"";
           setRecipe(JSON.parse(text.replace(/```json|```/g,"").trim()));
         } catch(e) {
