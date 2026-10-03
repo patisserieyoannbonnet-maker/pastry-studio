@@ -619,7 +619,7 @@ async function callAI(prompt, opts){
     throw {code:"api", message:String(m)};
   }
   const reader = res.body.getReader(), dec = new TextDecoder();
-  let buf = "", text = "", stop = null;
+  let buf = "", text = "", stop = null, think = 0, outTok = 0, thinkTok = 0;
   for (;;){
     const {value, done} = await reader.read();
     if (done) break;
@@ -630,13 +630,33 @@ async function callAI(prompt, opts){
       if (!line.startsWith("data:")) continue;
       const p = line.slice(5).trim(); if (!p) continue;
       let ev; try { ev = JSON.parse(p); } catch(e){ continue; }
-      if (ev.type === "content_block_delta" && ev.delta && ev.delta.type === "text_delta"){ text += ev.delta.text; if (opts.onText) opts.onText(text); }
-      else if (ev.type === "message_delta" && ev.delta) stop = ev.delta.stop_reason;
+      if (ev.type === "content_block_delta" && ev.delta){
+        if (ev.delta.type === "text_delta"){ text += ev.delta.text || ""; if (opts.onText) opts.onText(text.length, think); }
+        else if (ev.delta.type === "thinking_delta"){ think += (ev.delta.thinking || "").length; if (opts.onText) opts.onText(text.length, think); }
+      }
+      else if (ev.type === "message_delta"){
+        if (ev.delta && ev.delta.stop_reason) stop = ev.delta.stop_reason;
+        if (ev.usage){
+          if (ev.usage.output_tokens) outTok = ev.usage.output_tokens;
+          const d = ev.usage.output_tokens_details;
+          if (d && d.thinking_tokens) thinkTok = d.thinking_tokens;
+        }
+      }
       else if (ev.type === "error") throw {code:"api", message:(ev.error && ev.error.message) || "Erreur API"};
     }
   }
-  if (stop === "max_tokens") throw {code:"truncated"};
-  return text;
+  const info = {outTok, thinkTok, think, len: text.length, stop};
+  if (stop === "max_tokens"){
+    // Réponse coupée : on garde la fiche si elle est malgré tout complète et lisible.
+    try { const d = parseFiche(text); if (d && Array.isArray(d.composants) && d.composants.length) return {text, info}; } catch(e){}
+    throw Object.assign({code:"truncated"}, info);
+  }
+  if (!stop) throw Object.assign({code:"cut"}, info);
+  return {text, info};
+}
+function diag(i){
+  if (!i || !i.outTok) return "";
+  return " (" + fmt(i.outTok) + " jetons" + (i.thinkTok ? ", dont " + fmt(i.thinkTok) + " de réflexion" : (i.think ? ", avec réflexion" : "")) + ")";
 }
 function parseFiche(text){
   const a = text.indexOf("{"), b = text.lastIndexOf("}");
@@ -701,15 +721,18 @@ $("#form").addEventListener("submit", async ev => {
   st.className = "status"; st.textContent = "Le chef réfléchit à l'équilibre de la recette… 0 s";
   const t0 = Date.now();
   const ctl = new AbortController();
-  let written = 0, timedOut = false;
+  let written = 0, thinking = 0, timedOut = false;
   const stopBtn = $("#stop"); stopBtn.hidden = false; stopBtn.onclick = () => ctl.abort();
   const tick = setInterval(() => {
     const sec = Math.round((Date.now()-t0)/1000);
-    st.textContent = (written ? "Rédaction de la fiche… " + fmt(written) + " caractères" : "Le chef réfléchit à l'équilibre de la recette…") + " · " + sec + " s";
-    if (sec >= 240){ timedOut = true; ctl.abort(); }
+    st.textContent = (written ? "Rédaction de la fiche… " + fmt(written) + " caractères"
+      : thinking ? "Le chef réfléchit à l'équilibre de la recette… (" + fmt(thinking) + " caractères de réflexion)"
+      : "Le chef réfléchit à l'équilibre de la recette…") + " · " + sec + " s";
+    if (sec >= 285){ timedOut = true; ctl.abort(); }
   }, 1000);
   try {
-    const data = parseFiche(await callAI(buildPrompt(), {signal: ctl.signal, onText: t => { written = t.length; }}));
+    const r = await callAI(buildPrompt(), {signal: ctl.signal, onText: (n, th) => { written = n; thinking = th; }});
+    const data = parseFiche(r.text);
     if (!data || !Array.isArray(data.composants) || !data.composants.length) throw {code:"format"};
     data.demande = $("#demande").value.trim(); data.qteDemandee = $("#qte").value.trim();
     data.contraintes = [...document.querySelectorAll("#contraintes .chip[aria-pressed=true]")].map(b => b.textContent);
@@ -717,13 +740,15 @@ $("#form").addEventListener("submit", async ev => {
     fiche = data; isExample = false; facteur = 1; currentId = null;
     const savedOk = await saveFiche(data);
     render();
-    st.textContent = "Fiche construite en " + Math.round((Date.now()-t0)/1000) + " s" + (savedOk ? " et enregistrée dans Mes recettes." : ". Relisez-la avant usage.");
+    st.textContent = "Fiche construite en " + Math.round((Date.now()-t0)/1000) + " s" + diag(r.info) + (savedOk ? " et enregistrée dans Mes recettes." : ". Relisez-la avant usage.");
     $("#fiche").scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block:"start"});
   } catch(e){
     st.className = "status err";
-    if (timedOut){ st.textContent = "La génération a dépassé 4 minutes. Relancez, ou simplifiez la demande (moins de composants)."; return; }
+    if (timedOut){ st.textContent = "La génération a dépassé 4 minutes 45. Relancez, ou simplifiez la demande (moins de composants)."; return; }
     if (e && e.name === "AbortError") e = {code:"cancelled"};
     if (e && e.code === "api"){ st.textContent = "Erreur du service IA : " + e.message; return; }
+    if (e && e.code === "truncated"){ st.textContent = "La fiche a été coupée avant la fin" + diag(e) + ". Relancez ; si cela se reproduit, simplifiez la demande (moins de composants). L'exemple affiché à droite n'est pas votre fiche."; return; }
+    if (e && e.code === "cut"){ st.textContent = "La connexion a été coupée avant la fin de la fiche (" + fmt(e.len) + " caractères reçus). Relancez dans un instant."; return; }
     st.textContent = (e && MSG[e.code]) || (e && e.code === "format" ? "La réponse n'a pas pu être lue comme une fiche. Relancez la génération." : "La génération a échoué (" + ((e && e.code) || "erreur inconnue") + "). Relancez dans un instant.");
   } finally {
     clearInterval(tick); stopBtn.hidden = true;

@@ -2,7 +2,7 @@
 export const config = { runtime: "edge" };
 
 const MODEL = "claude-sonnet-5";
-const MAX_TOKENS = 8000;
+const MAX_TOKENS = 16000; // la réflexion éventuelle du modèle compte dans cette limite
 
 function json(obj, status) {
   return new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
