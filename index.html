@@ -1,124 +1,842 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ToqueLab — Générateur de recettes IA</title>
-  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #0e0b08; font-family: sans-serif; color: #f0e6d3; min-height: 100vh; }
-    select, input { background: rgba(255,255,255,0.04); border: 1px solid rgba(200,150,62,0.25); border-radius: 8px; color: #f0e6d3; font-size: 13px; padding: 11px 14px; width: 100%; margin-bottom: 16px; }
-    select option { background: #1a1409; }
-    button { width: 100%; padding: 14px; background: linear-gradient(135deg,#c8963e,#e8b86d); border: none; border-radius: 10px; color: #0e0b08; font-weight: 700; font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; margin-bottom: 24px; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #c8963e; margin-bottom: 6px; display: block; }
-    .header { background: #1c1710; padding: 20px 32px; border-bottom: 1px solid rgba(200,150,62,0.2); margin-bottom: 40px; }
-    .logo { font-size: 22px; font-weight: 700; color: #c8963e; }
-    .tag { font-size: 11px; letter-spacing: 2px; color: rgba(200,150,62,0.6); text-transform: uppercase; }
-    .main { max-width: 700px; margin: 0 auto; padding: 0 20px; }
-    .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(200,150,62,0.2); border-radius: 14px; padding: 32px; margin-top: 24px; }
-    .recipe-title { font-size: 26px; font-weight: 700; margin-bottom: 6px; }
-    .recipe-tag { font-style: italic; color: rgba(240,230,211,0.5); font-size: 14px; margin-bottom: 20px; }
-    .meta { display: flex; gap: 20px; padding: 14px 0; border-top: 1px solid rgba(200,150,62,0.15); border-bottom: 1px solid rgba(200,150,62,0.15); margin-bottom: 24px; flex-wrap: wrap; }
-    .meta-label { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: #c8963e; display: block; margin-bottom: 3px; }
-    .section-title { font-size: 16px; font-style: italic; color: #c8963e; margin: 20px 0 12px; }
-    ul, ol { padding-left: 20px; }
-    li { font-size: 13px; color: rgba(240,230,211,0.85); margin-bottom: 7px; line-height: 1.6; }
-    .tip { background: rgba(200,150,62,0.06); border-left: 2px solid #c8963e; border-radius: 0 8px 8px 0; padding: 14px 18px; margin-top: 20px; font-size: 13px; color: rgba(240,230,211,0.75); }
-    .actions { display: flex; gap: 10px; margin-top: 24px; }
-    .btn-sec { flex: 1; padding: 11px; background: transparent; border: 1px solid rgba(200,150,62,0.3); border-radius: 8px; color: #c8963e; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; width: auto; margin: 0; }
-    .error { background: rgba(220,60,60,0.08); border: 1px solid rgba(220,60,60,0.2); border-radius: 8px; padding: 14px; color: rgba(240,150,150,0.9); font-size: 13px; margin-top: 16px; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>ToqueLab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+html,body{margin:0}
+[hidden]{display:none!important}
+img{max-width:100%}
+
+:root{
+  --bg:#F1F4F2; --panel:#FFFFFF; --ink:#16201C; --muted:#5A6B63; --line:#D5DED9;
+  --accent:#2F6B4A; --accent-ink:#FFFFFF; --accent-soft:#E2EEE7;
+  --rasp:#B23A5B; --ok:#2E7D4F; --warn:#B7791F; --bad:#B23A3A;
+  --ok-soft:#E3F2E8; --warn-soft:#FBF0DC; --bad-soft:#F8E3E3;
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"Source Sans 3",ui-sans-serif,system-ui,-apple-system,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#101614; --panel:#18211D; --ink:#E6EEEA; --muted:#98ABA2; --line:#2B3833;
+    --accent:#7CC39A; --accent-ink:#0E1A14; --accent-soft:#1F3229;
+    --rasp:#E6819D; --ok:#7CC39A; --warn:#E3B45F; --bad:#E78A8A;
+    --ok-soft:#1C3027; --warn-soft:#352A16; --bad-soft:#3A1E1E;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#101614; --panel:#18211D; --ink:#E6EEEA; --muted:#98ABA2; --line:#2B3833;
+  --accent:#7CC39A; --accent-ink:#0E1A14; --accent-soft:#1F3229;
+  --rasp:#E6819D; --ok:#7CC39A; --warn:#E3B45F; --bad:#E78A8A;
+  --ok-soft:#1C3027; --warn-soft:#352A16; --bad-soft:#3A1E1E;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;padding-inline:16px;padding-block:0 48px}
+.wrap{max-width:1180px;margin:0 auto}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px}
+.mark{width:40px;height:40px;border-radius:10px;background:var(--accent);display:grid;place-items:center}
+.mark svg{width:24px;height:24px}
+.brand h1{font-family:var(--display);font-weight:700;font-size:26px;letter-spacing:-.02em;margin:0;line-height:1}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:14px}
+.tag{font-family:var(--mono);font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 10px;letter-spacing:.04em;text-transform:uppercase}
+.grid{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:28px;margin-top:24px;align-items:start}
+@media (max-width:880px){.grid{grid-template-columns:minmax(0,1fr)}}
+.atelier{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:18px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px)}
+@media (max-width:880px){.atelier{position:static}}
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--bg);border-radius:10px;padding:4px;gap:4px}
+.tabs button{font:600 15px var(--body);border:0;background:transparent;color:var(--muted);padding:9px;border-radius:7px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+label.lbl,.lbl{display:block;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+textarea,select,input[type=number]{width:100%;font:16px var(--body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px 12px}
+textarea{min-height:92px;resize:vertical}
+textarea:focus,select:focus,input:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:14px var(--body);border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:6px 12px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink);font-weight:600}
+.go{font:700 16px var(--body);background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;padding:13px 16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px}
+.go:disabled{opacity:.6;cursor:progress}
+.status{font-size:14px;color:var(--muted);min-height:20px}
+.status.err{color:var(--bad)}
+.hint{font-size:13px;color:var(--muted);margin:0}
+/* Fiche */
+.fiche{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.fhead{padding:24px 24px 20px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+.eyebrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pill{font:600 12px var(--mono);letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:3px 10px;background:var(--accent-soft);color:var(--ink)}
+.pill.ex{background:var(--warn-soft)}
+.fhead h2{font-family:var(--display);font-weight:700;font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.02em;margin:0;text-wrap:balance}
+.fhead p{margin:0;color:var(--muted);max-width:65ch}
+.toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:14px 24px;background:var(--bg);border-bottom:1px solid var(--line)}
+.scale{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.scale input{width:90px;font-family:var(--mono)}
+.scale span{color:var(--muted);font-size:14px}
+.btn2{font:600 14px var(--body);background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:8px 14px;cursor:pointer}
+section.blk{padding:22px 24px;border-bottom:1px solid var(--line)}
+section.blk:last-child{border-bottom:0}
+section.blk h3{font-family:var(--display);font-weight:700;font-size:20px;margin:0 0 4px;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:14px;margin:0 0 14px}
+.tblwrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);font-size:15px;vertical-align:top}
+th{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700}
+td.n,th.n{text-align:right;font-family:var(--mono);font-size:14px;white-space:nowrap}
+tr.tot td{font-weight:700;border-bottom:0}
+ol.steps{margin:14px 0 0;padding-left:22px;display:flex;flex-direction:column;gap:10px}
+ol.steps li{padding-left:4px}
+.robot{display:inline-flex;gap:6px;margin-left:6px;flex-wrap:wrap}
+.exsw{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:14px;color:var(--muted)}
+.conf{font:700 12px var(--mono);letter-spacing:.03em;border-radius:999px;padding:3px 10px;border:1px solid currentColor}
+.conf-A{color:var(--ok);background:var(--ok-soft)} .conf-B{color:var(--accent);background:var(--accent-soft)}
+.conf-C{color:var(--warn);background:var(--warn-soft)} .conf-D{color:var(--bad);background:var(--bad-soft)}
+.confline{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;margin:6px 0 4px;font-size:14px;color:var(--muted)}
+.toggle{display:flex;gap:10px;align-items:flex-start;cursor:pointer;font-size:15px}
+.toggle input{width:18px;height:18px;margin-top:3px;accent-color:var(--accent);flex:none}
+.why{display:block;margin-top:4px;font-size:14px;color:var(--muted);border-left:2px solid var(--accent);padding-left:10px}
+.robot span{font:600 12px var(--mono);background:var(--accent-soft);border-radius:6px;padding:1px 7px}
+.comp{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+/* Équilibrage */
+.bal{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.gauge{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.gauge .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.gauge .name{font-size:13px;font-weight:700;color:var(--muted);letter-spacing:.03em}
+.gauge .val{font:600 20px var(--mono)}
+.bar{position:relative;height:8px;background:var(--bg);border-radius:4px}
+.bar .zone{position:absolute;top:0;bottom:0;background:var(--ok-soft);border:1px solid var(--ok);border-radius:4px}
+.bar .dot{position:absolute;top:-4px;width:4px;height:16px;border-radius:2px;background:var(--ink);transform:translateX(-2px)}
+.gauge .tgt{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:6px}
+.st{font:700 11px var(--mono);letter-spacing:.05em;text-transform:uppercase;border-radius:5px;padding:2px 7px}
+.st.ok{background:var(--ok-soft);color:var(--ok)} .st.attention{background:var(--warn-soft);color:var(--warn)} .st.hors{background:var(--bad-soft);color:var(--bad)}
+.compgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.ccard{border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.ccard h4{margin:0 0 8px;font-size:15px}
+.stack{display:flex;height:12px;border-radius:6px;overflow:hidden;background:var(--bg)}
+.stack i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:12px;color:var(--muted)}
+.legend b{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.checks{display:flex;flex-direction:column;gap:8px}
+.check{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;padding:10px 12px;border:1px solid var(--line);border-radius:10px}
+.check .t{font-weight:600}
+.check .d{font-size:14px;color:var(--muted)}
+ul.tips{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
+.note{font-size:13px;color:var(--muted);margin-top:12px}
+.saved{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:8px}
+.saved-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.saved h2{font-family:var(--display);font-size:18px;margin:0;letter-spacing:-.01em}
+.saved .count{font:600 12px var(--mono);color:var(--muted)}
+.saved-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:360px;overflow:auto}
+.saved-list li{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:9px;padding:6px 6px 6px 10px}
+.saved-list li.cur{border-color:var(--accent);background:var(--accent-soft)}
+.saved-list .open{flex:1;min-width:0;text-align:left;background:none;border:0;color:var(--ink);font:15px var(--body);cursor:pointer;padding:2px 0}
+.saved-list .open b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.saved-list .open small{color:var(--muted);font-size:12px}
+.saved-list .del{font:600 12px var(--body);background:none;border:1px solid transparent;color:var(--muted);border-radius:6px;padding:4px 8px;cursor:pointer;flex:none}
+.saved-list .del.confirm{border-color:var(--bad);color:var(--bad)}
+footer{margin-top:28px;color:var(--muted);font-size:13px;text-align:center}
+.spin{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+</style>
 </head>
 <body>
-  <div id="root"></div>
-  <script type="text/babel">
-    const { useState } = React;
-    const DEVICES = ["Thermomix TM6","Thermomix TM5","KitchenAid","Kenwood Chef","Monsieur Cuisine","Four classique","Manuel"];
-    const LEVELS  = ["Débutant","Intermédiaire","Expert","Chef professionnel"];
-    const DIETS   = ["Aucune restriction","Sans gluten","Vegan","Sans lactose","Sans sucre","Halal"];
-    const CATS    = ["Gâteau","Tarte","Viennoiserie","Biscuit","Entremet","Chocolat","Glacé"];
 
-    function App() {
-      const [form, setForm] = useState({ category:"Gâteau", device:"Thermomix TM6", level:"Intermédiaire", diet:"Aucune restriction", servings:"8", style:"" });
-      const [loading, setLoading] = useState(false);
-      const [recipe, setRecipe] = useState(null);
-      const [error, setError] = useState("");
-      const set = (k,v) => setForm(f=>({...f,[k]:v}));
 
-      const generate = async () => {
-        setLoading(true); setError(""); setRecipe(null);
-        const prompt = `Tu es un chef pâtissier étoilé. Génère une recette de ${form.category} pour ${form.servings} personnes. Appareil: ${form.device}. Niveau: ${form.level}. Régime: ${form.diet}. ${form.style ? "Style: "+form.style : ""} N'utilise jamais de guillemets doubles dans les textes, utilise « » à la place. Réponds UNIQUEMENT en JSON sans backticks: {"name":"...","tagline":"...","prepTime":"...","cookTime":"...","difficulty":"...","ingredients":["..."],"steps":["..."],"chefTip":"..."}`;
-        try {
-          const res = await fetch("/api/generate", {
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({model:"claude-sonnet-5",max_tokens:4000,messages:[{role:"user",content:prompt}]})
-          });
-          const data = await res.json(); if (data.error) throw new Error(data.error.message || "Erreur API");
-          const text = data.content?.map(b=>b.text||"").join("")||"";
-          setRecipe(JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}")+1)));
-        } catch(e) {
-          setError("Erreur : " + e.message);
-        } finally { setLoading(false); }
-      };
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent-ink)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 13a4 4 0 1 1 1.5-7.7A4.5 4.5 0 0 1 16.5 5a4 4 0 1 1 .5 8"/><path d="M7 13v6h10v-6"/><path d="M10 16h4"/></svg>
+      </div>
+      <div>
+        <h1>ToqueLab</h1>
+        <p>Fiches techniques de pâtisserie et de glacerie, construites et équilibrées par l'IA</p>
+      </div>
+    </div>
+    <span class="tag">Version 2</span>
+  </header>
 
-      const printPDF = () => {
-        if (!recipe) return;
-        const w = window.open("","_blank");
-        w.document.write(`<html><head><title>${recipe.name}</title><style>body{font-family:sans-serif;max-width:600px;margin:40px auto;padding:0 20px;color:#222}h1{font-size:2rem;margin-bottom:6px}p.tag{color:#888;font-style:italic;margin-bottom:20px}h2{color:#c8963e;margin:20px 0 10px}ul,ol{padding-left:20px}li{margin-bottom:6px;line-height:1.6}.tip{background:#fdf8f2;border-left:3px solid #c8963e;padding:12px 16px;margin-top:20px;font-size:13px}</style></head><body><h1>${recipe.name}</h1><p class="tag">${recipe.tagline||""}</p><p><strong>Prép:</strong> ${recipe.prepTime} | <strong>Cuisson:</strong> ${recipe.cookTime} | <strong>Portions:</strong> ${form.servings} pers.</p><h2>Ingrédients</h2><ul>${(recipe.ingredients||[]).map(i=>"<li>"+i+"</li>").join("")}</ul><h2>Préparation</h2><ol>${(recipe.steps||[]).map(s=>"<li>"+s+"</li>").join("")}</ol>${recipe.chefTip?"<div class='tip'><strong>Astuce chef:</strong> "+recipe.chefTip+"</div>":""}<script>window.onload=()=>window.print()<\/script></body></html>`);
-        w.document.close();
-      };
-
-      return (
-        <div>
-          <div className="header">
-            <div className="logo">✦ ToqueLab</div>
-            <div className="tag">Générateur de recettes IA — Pâtisserie</div>
-          </div>
-          <div className="main">
-            {[["Catégorie",CATS,"category"],["Appareil",DEVICES,"device"],["Niveau",LEVELS,"level"],["Régime",DIETS,"diet"]].map(([label,opts,key])=>(
-              <div key={key}>
-                <span className="label">{label}</span>
-                <select value={form[key]} onChange={e=>set(key,e.target.value)}>
-                  {opts.map(o=><option key={o}>{o}</option>)}
-                </select>
-              </div>
-            ))}
-            <span className="label">Portions</span>
-            <input type="number" value={form.servings} onChange={e=>set("servings",e.target.value)} />
-            <span className="label">Style / Inspiration</span>
-            <input type="text" value={form.style} onChange={e=>set("style",e.target.value)} placeholder="Ex: japonais, fruité..." />
-            <button onClick={generate} disabled={loading}>{loading?"Génération...":"✦ Générer la recette"}</button>
-            {error && <div className="error">{error}</div>}
-            {recipe && (
-              <div className="card">
-                <div className="recipe-title">{recipe.name}</div>
-                <div className="recipe-tag">{recipe.tagline}</div>
-                <div className="meta">
-                  {[["Préparation",recipe.prepTime],["Cuisson",recipe.cookTime],["Difficulté",recipe.difficulty],["Portions",form.servings+" pers."]].map(([k,v])=>(
-                    <div key={k}><span className="meta-label">{k}</span><span>{v}</span></div>
-                  ))}
-                </div>
-                <div className="section-title">Ingrédients</div>
-                <ul>{(recipe.ingredients||[]).map((i,n)=><li key={n}>{i}</li>)}</ul>
-                <div className="section-title">Préparation</div>
-                <ol>{(recipe.steps||[]).map((s,n)=><li key={n}>{s}</li>)}</ol>
-                {recipe.chefTip && <div className="tip"><strong style={{color:"#c8963e"}}>✦ Astuce chef — </strong>{recipe.chefTip}</div>}
-                <div className="actions">
-                  <button className="btn-sec" onClick={printPDF}>↓ PDF</button>
-                  <button className="btn-sec" onClick={generate}>Nouvelle variante</button>
-                </div>
-              </div>
-            )}
-          </div>
+  <div class="grid">
+    <form class="atelier" id="form" autocomplete="off">
+      <div>
+        <label class="lbl" for="demande">Que voulez-vous réaliser ?</label>
+        <textarea id="demande" placeholder="Ex. Entremets chocolat noir et framboise pour 10 personnes, ou sorbet mangue-passion pour vitrine à -12 °C"></textarea>
+        <p class="hint" style="margin-top:6px">Pâtisserie ou glacerie : ToqueLab reconnaît seule le type de recette.</p>
+      </div>
+      <div>
+        <label class="lbl" for="qte">Quantité <span style="text-transform:none;letter-spacing:0;font-weight:400">(facultatif)</span></label>
+        <input type="text" id="qte" placeholder="Ex. 8 parts, 2 kg de mix">
+      </div>
+      <div>
+        <span class="lbl">Contraintes</span>
+        <div class="chips" id="contraintes">
+          <button type="button" class="chip" aria-pressed="false">Sans gluten</button>
+          <button type="button" class="chip" aria-pressed="false">Sans lactose</button>
+          <button type="button" class="chip" aria-pressed="false">Sans œuf</button>
+          <button type="button" class="chip" aria-pressed="false">Moins sucré</button>
+          <button type="button" class="chip" aria-pressed="false">Végétal</button>
         </div>
-      );
+      </div>
+      <div>
+        <label class="lbl" for="materiel">Matériel</label>
+        <select id="materiel">
+          <option value="classique">Laboratoire classique</option>
+          <option value="robot">Robot cuiseur (température, vitesse, temps)</option>
+        </select>
+      </div>
+      <label class="toggle" for="explique">
+        <input type="checkbox" id="explique">
+        <span><b>Expliquer chaque étape</b><br><span class="hint">Affiche le pourquoi technique de chaque geste. Idéal pour les apprenants.</span></span>
+      </label>
+      <button class="go" id="go" type="submit">Construire la fiche</button>
+      <button class="btn2" id="stop" type="button" hidden>Arrêter la génération</button>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+      <p class="hint">La génération prend en général 30 à 90 secondes. Les taux d'équilibrage sont recalculés par la page à partir des compositions, pour être vérifiables.</p>
+      <section class="saved" aria-labelledby="saved-h">
+        <div class="saved-top"><h2 id="saved-h">Mes recettes</h2><span class="count" id="saved-count"></span></div>
+        <p class="hint" id="saved-msg">Chaque fiche construite est enregistrée ici automatiquement.</p>
+        <ul class="saved-list" id="saved-list"></ul>
+      </section>
+    </form>
+
+    <article class="fiche" id="fiche" aria-live="polite"></article>
+  </div>
+
+  <footer>ToqueLab · version 2 · Chaque fiche générée doit être relue et validée par un professionnel avant usage en formation.</footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- Exemples de départ (affichés comme exemples) ---------- */
+const EXEMPLES = {
+  patisserie: {
+    titre:"Tarte au citron meringuée",
+    type:"patisserie",
+    description:"Pâte sucrée sablée, crème citron montée au beurre, meringue italienne dorée au chalumeau.",
+    rendement:{valeur:8, unite:"parts"},
+    materiel:"classique",
+    composants:[
+      {nom:"Pâte sucrée (cercle Ø 22 cm)", ingredients:[
+        {nom:"Beurre doux 82 %", g:100, eau:16, sucres:0.5, mg:82, es:84},
+        {nom:"Sucre glace", g:65, eau:0, sucres:100, mg:0, es:100},
+        {nom:"Poudre d'amande", g:20, eau:5, sucres:4, mg:50, es:95},
+        {nom:"Œuf entier", g:40, eau:76, sucres:0.5, mg:10, es:24},
+        {nom:"Farine T55", g:170, eau:14, sucres:1.5, mg:1.2, es:86},
+        {nom:"Sel fin", g:1, eau:0, sucres:0, mg:0, es:100}],
+       etapes:[
+        {texte:"Crémer le beurre pommade avec le sucre glace, la poudre d'amande et le sel.", pourquoi:"Le sucre glace se dissout vite dans le beurre et donne une pâte fine et régulière."},
+        {texte:"Ajouter l'œuf, puis la farine. Mélanger juste assez pour obtenir une pâte homogène (sablage limité).", pourquoi:"Trop travailler la farine développe le gluten : la pâte se rétracte à la cuisson."},
+        {texte:"Filmer au contact, réserver 2 h à 4 °C. Abaisser à 2,5 mm, foncer, réserver 30 min au froid.", pourquoi:"Le repos au froid raffermit le beurre et détend le gluten : la pâte se travaille sans casser et garde sa forme."},
+        {texte:"Cuire à blanc à 160 °C ventilé, 20 à 25 min, jusqu'à coloration blonde homogène.", fin:"coloration blonde homogène, fond sec au toucher", pourquoi:"Un fond bien cuit reste croustillant sous une garniture humide."}]},
+      {nom:"Crème citron", ingredients:[
+        {nom:"Jus de citron jaune", g:110, eau:91, sucres:2.5, mg:0.2, es:9},
+        {nom:"Zestes de citron", g:6, eau:81, sucres:4, mg:0.3, es:19},
+        {nom:"Sucre semoule", g:110, eau:0, sucres:100, mg:0, es:100},
+        {nom:"Œufs entiers", g:150, eau:76, sucres:0.5, mg:10, es:24},
+        {nom:"Beurre doux 82 %", g:150, eau:16, sucres:0.5, mg:82, es:84}],
+       etapes:[
+        {texte:"Frotter les zestes avec le sucre, ajouter les œufs et le jus.", pourquoi:"Le frottement libère les huiles essentielles du zeste, qui se fixent dans le sucre."},
+        {texte:"Cuire au bain-marie en fouettant jusqu'à 82-83 °C (nappe épaisse).", pourquoi:"Les protéines de l'œuf coagulent vers 80 °C et épaississent la crème ; au-delà de 85 °C elles grainent."},
+        {texte:"Refroidir à 40 °C, incorporer le beurre en morceaux et mixer 8 à 10 min pour émulsionner.", pourquoi:"À 40 °C le beurre s'émulsionne sans fondre complètement : la crème devient lisse, brillante et se tient."},
+        {texte:"Garnir le fond de tarte cuit et lisser. Réserver 1 h à 4 °C.", pourquoi:"Le beurre cristallise au froid et donne sa tenue à la crème pour la découpe."}]},
+      {nom:"Meringue italienne", ingredients:[
+        {nom:"Blancs d'œufs", g:60, eau:88, sucres:0.7, mg:0.2, es:12},
+        {nom:"Sucre semoule", g:120, eau:0, sucres:100, mg:0, es:100},
+        {nom:"Eau", g:40, eau:100, sucres:0, mg:0, es:0}],
+       etapes:[
+        {texte:"Cuire l'eau et le sucre à 118-121 °C.", pourquoi:"À cette température le sirop a assez peu d'eau pour cuire et stabiliser les blancs."},
+        {texte:"Verser en filet sur les blancs montés mousseux, fouetter jusqu'à complet refroidissement (35 °C).", pourquoi:"Le filet évite de cuire les blancs en un point ; fouetter jusqu'à 35 °C fixe une structure ferme et brillante."},
+        {texte:"Pocher à la douille St-Honoré, colorer au chalumeau.", pourquoi:"Le chalumeau caramélise le sucre en surface sans chauffer la crème dessous."}]}
+    ],
+    controles:[
+      {label:"Cuisson de la crème citron", valeur:"82-83 °C", cible:"80-85 °C", statut:"ok", detail:"Coagulation des œufs suffisante pour la tenue, sans grainer."},
+      {label:"Ratio beurre / crème citron", valeur:"29 %", cible:"25-35 %", statut:"ok", detail:"Assure une texture onctueuse et une bonne tenue à la découpe."},
+      {label:"Sucre cuit meringue", valeur:"118-121 °C", cible:"118-121 °C", statut:"ok", detail:"Meringue stable, pochable, qui ne rend pas d'eau."}
+    ],
+    conseils:["Émulsionner le beurre à 40 °C, pas au-dessus : la crème reste lisse et brillante.","Imperméabiliser le fond avec un voile de beurre de cacao si la tarte doit attendre."],
+    erreurs:["Crème citron qui graine : cuisson trop rapide ou au-delà de 85 °C.","Fond détrempé : fond pas assez cuit ou garni trop tôt."],
+    conservation:"Froid positif, sous cloche. Estimation : 48 h, à valider par essai et selon le GBPH. Meringue à colorer au dernier moment."
+  },
+  glacerie: {
+    titre:"Glace pistache",
+    type:"glacerie", sous_type:"creme_glacee",
+    description:"Base lactée à la pâte de pistache pure, équilibrée pour une vitrine à -11/-12 °C.",
+    rendement:{valeur:1000, unite:"g de mix"},
+    materiel:"classique",
+    composants:[
+      {nom:"Mix glace pistache", ingredients:[
+        {nom:"Lait entier", g:616, eau:87.5, sucres:4.8, mg:3.6, esl:8.9, es:12.5, pac:0.048, pod:0.008},
+        {nom:"Crème 35 %", g:90, eau:58, sucres:3, mg:35, esl:5.5, es:42, pac:0.03, pod:0.005},
+        {nom:"Lait écrémé en poudre", g:30, eau:3, sucres:50, mg:1, esl:96, es:97, pac:0.5, pod:0.08},
+        {nom:"Saccharose", g:120, eau:0, sucres:100, mg:0, esl:0, es:100, pac:1, pod:1},
+        {nom:"Dextrose", g:40, eau:8, sucres:92, mg:0, esl:0, es:92, pac:1.75, pod:0.64},
+        {nom:"Pâte de pistache pure", g:100, eau:2, sucres:6, mg:50, esl:0, es:98, pac:0.06, pod:0.06},
+        {nom:"Stabilisant (neutre)", g:4, eau:0, sucres:0, mg:0, esl:0, es:100, pac:0, pod:0}],
+       etapes:[
+        {texte:"Chauffer le lait et la crème. À 25 °C, ajouter la poudre de lait. À 45 °C, ajouter le saccharose et le dextrose mélangés au stabilisant.", pourquoi:"Chaque poudre a sa température de dispersion idéale ; mélanger le stabilisant au sucre évite les grumeaux."},
+        {texte:"Pasteuriser à 85 °C, puis refroidir rapidement à 4 °C.", pourquoi:"La pasteurisation détruit les micro-organismes ; le refroidissement rapide limite le temps passé dans la zone de multiplication."},
+        {texte:"Mixer avec la pâte de pistache. Laisser maturer 4 à 12 h à 4 °C.", pourquoi:"La maturation hydrate les protéines et le stabilisant, et cristallise la matière grasse : meilleur foisonnement, texture plus onctueuse."},
+        {texte:"Mixer à nouveau, turbiner, puis durcir en cellule à -35 °C avant la vitrine.", pourquoi:"Un durcissement rapide forme de petits cristaux de glace : la texture reste fine."}]}
+    ],
+    controles:[
+      {label:"Pasteurisation", valeur:"85 °C", cible:"85 °C (haute)", statut:"ok", detail:"Hygiène et hydratation du stabilisant."},
+      {label:"Maturation", valeur:"4 à 12 h", cible:"4 à 12 h à 4 °C", statut:"ok", detail:"Améliore le foisonnement et la texture."}
+    ],
+    conseils:["Pour une vitrine plus froide (-14 °C), augmenter légèrement le dextrose pour remonter le PAC.","Une pâte de pistache sucrée change l'équilibre : recalculer les sucres."],
+    erreurs:["Glace dure en vitrine : PAC trop bas.","Texture sableuse : lactose en excès (trop de poudre de lait)."],
+    conservation:"Vitrine -11/-12 °C. Estimation : 7 jours une fois durcie, à valider par essai et selon le GBPH."
+  }
+};
+
+/* ---------- Repères d'équilibrage (indicatifs) ---------- */
+const CIBLES = {
+  creme_glacee:[
+    {k:"sucres", n:"Sucres", u:"%", min:16, max:22, lo:0, hi:40},
+    {k:"mg", n:"Matières grasses", u:"%", min:6, max:12, lo:0, hi:20},
+    {k:"esl", n:"ESL (extrait sec lactique non gras)", u:"%", min:8, max:11, lo:0, hi:16},
+    {k:"es", n:"Extrait sec total", u:"%", min:32, max:42, lo:15, hi:55},
+    {k:"pac", n:"PAC (pouvoir antigel)", u:"", min:240, max:290, lo:120, hi:400},
+    {k:"pod", n:"POD (pouvoir sucrant)", u:"", min:150, max:200, lo:80, hi:280}],
+  sorbet:[
+    {k:"sucres", n:"Sucres", u:"%", min:24, max:32, lo:0, hi:45},
+    {k:"mg", n:"Matières grasses", u:"%", min:0, max:2, lo:0, hi:10},
+    {k:"es", n:"Extrait sec total", u:"%", min:28, max:36, lo:10, hi:50},
+    {k:"pac", n:"PAC (pouvoir antigel)", u:"", min:250, max:320, lo:120, hi:420},
+    {k:"pod", n:"POD (pouvoir sucrant)", u:"", min:170, max:230, lo:80, hi:300}]
+};
+
+/* ---------- État ---------- */
+let fiche = null;
+let isExample = true;
+let facteur = 1;
+
+const $ = s => document.querySelector(s);
+const el = (tag, attrs={}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs)){
+    if (k === "class") e.className = v; else if (k === "text") e.textContent = v; else e.setAttribute(k, v);
+  }
+  for (const k of kids) if (k != null) e.append(k);
+  return e;
+};
+const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+const fmt = (n, d=0) => n.toLocaleString("fr-FR", {minimumFractionDigits:d, maximumFractionDigits:d});
+const fmtG = g => g >= 100 ? fmt(Math.round(g)) : g >= 10 ? fmt(Math.round(g*2)/2, g%1 ? 1 : 0) : fmt(Math.round(g*10)/10, 1);
+
+/* ---------- Calculs ---------- */
+function totaux(ings){
+  const t = {g:0, eau:0, sucres:0, mg:0, esl:0, es:0, pac:0, pod:0};
+  for (const i of ings){
+    const g = num(i.g); t.g += g;
+    for (const k of ["eau","sucres","mg","esl","es"]) t[k] += g*num(i[k])/100;
+    t.pac += g*num(i.pac); t.pod += g*num(i.pod);
+  }
+  const pct = k => t.g ? t[k]/t.g*100 : 0;
+  return {g:t.g, eau:pct("eau"), sucres:pct("sucres"), mg:pct("mg"), esl:pct("esl"), es:pct("es"),
+          pac: t.g ? t.pac/t.g*1000 : 0, pod: t.g ? t.pod/t.g*1000 : 0};
+}
+function statut(v, c){
+  if (v >= c.min && v <= c.max) return "ok";
+  const span = (c.max - c.min) || 1;
+  if (v >= c.min - span*0.25 && v <= c.max + span*0.25) return "attention";
+  return "hors";
+}
+const ST_LBL = {ok:"Dans la cible", attention:"Limite", hors:"Hors cible"};
+
+/* ---------- Vérifications ToqueLab (contrôles par le code) ---------- */
+const norm = s => String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/œ/g,"oe");
+const GELIF = [
+  {re:/gelatine/, nom:"Gélatine", min:0.2, max:3, src:"repère pâtisserie (crémeux ≈ 0,8 %, insert ≈ 2,5 %)"},
+  {re:/agar/, nom:"Agar-agar", min:0.05, max:4, src:"fiche fabricant Louis François"},
+  {re:/pectine.*jaune/, nom:"Pectine jaune", min:1, max:2, src:"fiche fabricant Louis François"},
+  {re:/pectine.*(nh|nappage)/, nom:"Pectine NH", min:0.3, max:5, src:"fiches fabricant Louis François (NH nappage 0,8-1,2 %, 325NH95 0,3-5 %)"},
+  {re:/gellane/, nom:"Gomme gellane", min:0.2, max:1, src:"fiche fabricant Louis François"},
+];
+const INTERDITS = {
+  "Sans gluten":{re:/farine|feuilletine|biscuit|ble|seigle|orge|epeautre|chapelure|speculoos|gavotte|crepe dentelle/, sauf:/sans gluten|riz|mais|sarrasin|chataigne|amande|noisette|pomme de terre/},
+  "Sans lactose":{re:/\blait\b|lait |creme|beurre|mascarpone|fromage|yaourt|chocolat au lait|chocolat blanc/, sauf:/sans lactose|vegetal|coco|amande|avoine|soja|beurre de cacao|creme de marron|creme de coco/},
+  "Sans œuf":{re:/oeuf|jaune|blanc d|blancs/, sauf:/sans oeuf|aquafaba/},
+  "Végétal":{re:/gelatine|beurre|\blait\b|lait |creme|oeuf|jaune|blanc d|blancs|miel|mascarpone|fromage/, sauf:/vegetal|coco|amande|avoine|soja|beurre de cacao|creme de marron|agar/},
+};
+function auditFiche(f){
+  const out = [], add = (niveau, titre, detail) => out.push({niveau, titre, detail});
+  const comps = f.composants || [];
+  // 1. Demande du client
+  const cons = Array.isArray(f.contraintes) ? f.contraintes : [];
+  cons.forEach(c => {
+    const r = INTERDITS[c]; if (!r) return;
+    comps.forEach(cp => (cp.ingredients||[]).forEach(i => {
+      const n = norm(i.nom);
+      if (r.re.test(n) && !r.sauf.test(n)) add("hors", "Contrainte « " + c + " » non respectée", "« " + i.nom + " » dans " + cp.nom + ".");
+    }));
+  });
+  const qd = String(f.qteDemandee||"");
+  const mParts = norm(qd).match(/(\d+)\s*(parts?|pers|personnes?)/);
+  if (mParts && f.type !== "glacerie" && f.rendement && num(f.rendement.valeur) && num(f.rendement.valeur) !== Number(mParts[1]))
+    add("attention", "Rendement différent de la demande", "Demandé : " + qd + ". Fiche : " + f.rendement.valeur + " " + (f.rendement.unite||"") + ".");
+  // 2. Dosages (surdosage / sous-dosage)
+  comps.forEach(cp => {
+    const ings = cp.ingredients || [], tot = ings.reduce((s,i)=>s+num(i.g),0); if (!tot) return;
+    ings.forEach(i => {
+      const n = norm(i.nom), pct = num(i.g)/tot*100;
+      const g = GELIF.find(x => x.re.test(n));
+      if (g && (pct < g.min || pct > g.max)) add(pct > g.max ? "hors" : "attention", (pct > g.max ? "Surdosage : " : "Sous-dosage : ") + g.nom + " dans " + cp.nom, fmt(pct,2) + " % de la masse, repère " + String(g.min).replace(".",",") + " à " + String(g.max).replace(".",",") + " % (" + g.src + ").");
+      if (/\bsel\b|fleur de sel/.test(n) && pct > 2) add("hors", "Surdosage : sel dans " + cp.nom, fmt(pct,1) + " % de la masse (au-delà de 2 %, goût salé dominant).");
+      if (/levure chimique|poudre a lever|bicarbonate/.test(n) && pct > 3) add("hors", "Surdosage : poudre levante dans " + cp.nom, fmt(pct,1) + " % de la masse.");
+    });
+  });
+  // 3. Cuisson : température, durée indicative, indicateur de fin
+  comps.forEach(cp => (cp.etapes||[]).forEach((s, k) => {
+    const t = norm(typeof s === "string" ? s : (s.texte||"") + " " + (s.temp||"") + " " + (s.duree||"") + " " + (s.fin||""));
+    const cuisson = /\bcuire\b|\benfourner\b|\bpasteuris(er|ez)\b|\btorrefier\b|\bcarameliser\b|\bau four\b|\bfour (chaud|ventile|a|doux|moyen)\b/.test(t);
+    if (!cuisson) return;
+    const auFour = /\bau four\b|\bfour (chaud|ventile|a|doux|moyen)\b|\benfourner\b|cuire a blanc/.test(t);
+    const lieu = cp.nom + ", étape " + (k+1);
+    if (!/°|degre|\d+\s*c\b/.test(t) && !/ebullition|bouillir|fremi|chalumeau|bain-marie/.test(t)) add("attention", "Température manquante", lieu + " : « " + (s.texte||s) + " »");
+    if (auFour){
+      const duree = /\d+\s*(min|h\b|heure)/.test(t);
+      const fin = (s && s.fin) || /coloration|colore|dore|blond|a coeur|texture|ferme|elastique|sonne creux|pique|lame|prise|se decolle|tremblot/.test(t);
+      if (!duree && !fin) add("attention", "Cuisson : durée indicative et indicateur de fin manquants", lieu + ".");
+      else if (!duree) add("attention", "Durée indicative de cuisson manquante", lieu + ".");
+      else if (!fin) add("attention", "Indicateur de fin de cuisson manquant", lieu + " : la durée dépend du four, préciser la couleur, la texture ou la température à cœur attendue.");
     }
-    ReactDOM.render(<App />, document.getElementById("root"));
-  </script>
+  }));
+  // 3 bis. Mise à l'échelle
+  if (facteur > 2 || facteur < 0.5) add("attention", "Recette multipliée par " + fmt(facteur,2), "Une multiplication n'est pas une adaptation : revoir les temps de cuisson, la taille des moules, l'épaisseur, le refroidissement et la capacité du matériel.");
+  // 3 ter. Conservation
+  if (f.conservation && !/estim|valider|essai|gbph/.test(norm(f.conservation))) add("attention", "Durée de conservation non justifiée", "« " + f.conservation + " » : à considérer comme une estimation, à valider par essai et selon le GBPH.");
+  // 4. Incompatibilités technologiques
+  const toutTexte = norm(comps.map(cp => (cp.etapes||[]).map(s => s.texte||s).join(" ")).join(" ") + " " + (f.conservation||"") + " " + (f.titre||""));
+  const congele = /congel|surgel|glace|-18|cellule/.test(toutTexte) && f.type !== "glacerie";
+  comps.forEach(cp => (cp.ingredients||[]).forEach(i => {
+    const n = norm(i.nom);
+    if (congele && /agar|pectine.*jaune/.test(n)) add("hors", "Incompatible avec la congélation", "« " + i.nom + " » dans " + cp.nom + " : gel non stable à la congélation (fiche fabricant).");
+  }));
+  // 5. Chiffres annoncés incohérents avec le calcul
+  (f.controles||[]).forEach(c => {
+    const txt = norm((c.label||"") + " " + (c.valeur||""));
+    if (!/brix/.test(txt)) return;
+    const m = String(c.valeur||"").replace(",",".").match(/(\d+(\.\d+)?)/); if (!m) return;
+    const annonce = Number(m[1]);
+    const mots = n => norm(n).split(/[^a-z]+/).filter(w => w.length > 3);
+    const lab = mots(c.label + " " + (c.detail||""));
+    let cible = comps.find(cp => mots(cp.nom).some(w => lab.includes(w)));
+    const calc = (cible ? [cible] : comps).map(cp => totaux(cp.ingredients||[]).sucres);
+    const proche = calc.reduce((b,v) => Math.abs(v-annonce) < Math.abs(b-annonce) ? v : b, calc[0] ?? 0);
+    if (Math.abs(proche - annonce) > 10) add("attention", "Chiffre annoncé non vérifié", "La fiche annonce « " + c.label + " : " + c.valeur + " », le calcul des ingrédients donne " + fmt(proche,0) + " % de sucres. Vérifier la réduction ou corriger.");
+  });
+  // 6. Glacerie : total du mix et équilibre
+  if (f.type === "glacerie"){
+    const all = comps.flatMap(cp => cp.ingredients||[]), t = totaux(all);
+    const r = num(f.rendement && f.rendement.valeur);
+    if (r && Math.abs(t.g - r)/r > 0.05) add("attention", "Total du mix différent du rendement", fmt(Math.round(t.g)) + " g d'ingrédients pour " + fmt(r) + " g annoncés.");
+    CIBLES[f.sous_type === "sorbet" ? "sorbet" : "creme_glacee"].forEach(c => { const s = statut(t[c.k], c); if (s === "hors") add("hors", c.n + " hors cible", fmt(t[c.k], c.u?1:0) + (c.u?" "+c.u:"") + " pour une cible de " + c.min + " à " + c.max + "."); });
+  }
+  return out;
+}
+function corrTxt(c){
+  if (!c) return "";
+  if (typeof c === "string") return c;
+  return [c.element ? c.element + " : " : "", c.avant != null ? String(c.avant) : "?", " → ", c.apres != null ? String(c.apres) : "?",
+    c.raison ? ". Raison : " + c.raison : "", c.consequence ? ". Conséquence : " + c.consequence : ""].join("");
+}
+function niveauConfiance(f, alertes){
+  const comps = f.composants || [];
+  const incomplet = !comps.length || comps.some(cp => !(cp.ingredients||[]).length || (cp.ingredients||[]).some(i => !(num(i.g) > 0)) || !(cp.etapes||[]).length);
+  if (incomplet || alertes.some(a => a.niveau === "hors")) return {n:"D", lbl:"Non exploitable en l'état", d: incomplet ? "Données insuffisantes : ingrédients sans poids ou étapes manquantes." : "Au moins un risque d'échec détecté : corriger avant de produire."};
+  if (alertes.length) return {n:"C", lbl:"À tester", d:"Formulation plausible, mais des points restent à vérifier : faire un essai avant production."};
+  const valide = comps.every(cp => (cp.ingredients||[]).every(i => i.src === "base"));
+  if (valide) return {n:"A", lbl:"Calculé", d:"Compositions issues de la base validée et calculs vérifiés."};
+  return {n:"B", lbl:"Adapté", d:"Cohérente et sans alerte, mais les compositions des ingrédients sont estimées et le résultat dépend du matériel et des matières premières. Le niveau A sera possible avec la base Ciqual et les règles validées."};
+}
+
+/* ---------- Rendu ---------- */
+function render(){
+  const f = fiche, root = $("#fiche");
+  root.replaceChildren();
+  if (!f) return;
+  const isGla = f.type === "glacerie";
+  const sousType = f.sous_type === "sorbet" ? "sorbet" : "creme_glacee";
+  const base = num(f.rendement && f.rendement.valeur) || 1;
+  const unite = (f.rendement && f.rendement.unite) || (isGla ? "g de mix" : "parts");
+
+  // En-tête
+  const eyebrow = el("div", {class:"eyebrow"},
+    isExample ? el("span", {class:"pill ex", text:"Exemple"}) : el("span", {class:"pill", text:"Généré par l'IA"}),
+    el("span", {class:"pill", text: isGla ? (sousType === "sorbet" ? "Glacerie · Sorbet" : "Glacerie · Crème glacée") : "Pâtisserie"}),
+    f.materiel === "robot" ? el("span", {class:"pill", text:"Robot cuiseur"}) : null);
+  const alertes = auditFiche(f), conf = niveauConfiance(f, alertes);
+  eyebrow.append(el("span", {class:"conf conf-" + conf.n, title: conf.d, text:"Niveau " + conf.n + " · " + conf.lbl}));
+  let exSw = null;
+  if (isExample){
+    exSw = el("div", {class:"exsw"}, el("span", {text:"Voir un exemple :"}));
+    [["patisserie","Tarte au citron"],["glacerie","Glace pistache"]].forEach(([k,lbl]) => {
+      const bt = el("button", {type:"button", class:"chip", "aria-pressed": String(f === EXEMPLES[k]), text:lbl});
+      bt.addEventListener("click", () => showExample(k)); exSw.append(bt);
+    });
+  }
+  root.append(el("div", {class:"fhead"}, eyebrow, el("h2", {text:f.titre||"Fiche technique"}), f.description ? el("p", {text:f.description}) : null, exSw));
+
+  // Barre d'ajustement
+  const input = el("input", {type:"number", id:"echelle", min:"1", step: isGla ? "100" : "1", value:String(Math.round(base*facteur)), "aria-label":"Quantité souhaitée"});
+  input.addEventListener("change", () => { const v = num(input.value); if (v > 0){ facteur = v/base; render(); } });
+  const pdfBtn = el("button", {class:"btn2", type:"button", id:"pdf", text:"Télécharger la fiche (PDF)"});
+  pdfBtn.addEventListener("click", exportPdf);
+  root.append(el("div", {class:"toolbar"},
+    el("div", {class:"scale"}, el("span", {text:"Rendement"}), input, el("span", {text:unite}),
+      facteur !== 1 ? el("span", {text:"(base " + fmt(base) + ", ×" + fmt(facteur,2) + ")"}) : null,
+      (facteur > 2 || facteur < 0.5) ? el("span", {class:"st attention", text:"Cuissons et moules à revoir"}) : null),
+    pdfBtn));
+
+  // Vérifications
+  const vSec = el("section", {class:"blk verif"}, el("h3", {text:"Vérifications ToqueLab"}),
+    el("div", {class:"confline"}, el("span", {class:"conf conf-" + conf.n, text:"Niveau " + conf.n + " · " + conf.lbl}), el("span", {text:conf.d})));
+  if ((f.corrections||[]).length){
+    const ul = el("ul", {class:"tips"}); f.corrections.forEach(c => ul.append(el("li", {text:corrTxt(c)})));
+    vSec.append(el("h4", {style:"margin:4px 0 8px;font-size:15px", text:"Corrections apportées à la demande"}), ul);
+  }
+  if (!alertes.length){
+    vSec.append(el("div", {class:"check", style:"margin-top:10px"}, el("span", {class:"st ok", text:"OK"}), el("div", {}, el("div", {class:"t", text:"Aucun risque détecté par les contrôles automatiques"}), el("div", {class:"d", text:"Dosages, températures, contraintes et cohérence des chiffres vérifiés. La relecture d'un professionnel reste nécessaire."}))));
+  } else {
+    const nb = alertes.filter(a => a.niveau === "hors").length;
+    vSec.append(el("p", {class:"sub", style:"margin-top:6px", text: alertes.length + " point" + (alertes.length>1?"s":"") + " à vérifier" + (nb ? ", dont " + nb + " risque" + (nb>1?"s":"") + " d'échec" : "") + "."}));
+    const ch = el("div", {class:"checks"});
+    alertes.sort((a,b) => (a.niveau === "hors" ? 0 : 1) - (b.niveau === "hors" ? 0 : 1)).forEach(a => ch.append(el("div", {class:"check"}, el("span", {class:"st " + a.niveau, text: a.niveau === "hors" ? "Risque" : "À vérifier"}), el("div", {}, el("div", {class:"t", text:a.titre}), el("div", {class:"d", text:a.detail})))));
+    vSec.append(ch);
+  }
+  root.append(vSec);
+
+  // Composants
+  const allIngs = [];
+  const compSec = el("section", {class:"blk"}, el("h3", {text:"Recette"}), el("p", {class:"sub", text:"Quantités en grammes, recalculées selon le rendement choisi."}));
+  (f.composants||[]).forEach(c => {
+    const ings = (c.ingredients||[]).map(i => ({...i, g:num(i.g)*facteur}));
+    allIngs.push(...ings);
+    const tb = el("tbody");
+    ings.forEach(i => tb.append(el("tr", {}, el("td", {text:i.nom}), el("td", {class:"n", text:fmtG(i.g) + " g"}))));
+    const tot = ings.reduce((s,i)=>s+i.g,0);
+    tb.append(el("tr", {class:"tot"}, el("td", {text:"Total"}), el("td", {class:"n", text:fmtG(tot) + " g"})));
+    const ol = el("ol", {class:"steps"});
+    (c.etapes||[]).forEach(s => {
+      const li = el("li", {}, typeof s === "string" ? s : (s.texte||""));
+      if (s && s.fin) li.append(el("span", {class:"robot"}, el("span", {text:"Fin : " + s.fin})));
+      if (s && (s.temp || s.vitesse || s.duree)){
+        const r = el("span", {class:"robot"});
+        if (s.duree) r.append(el("span", {text:s.duree}));
+        if (s.temp) r.append(el("span", {text:s.temp}));
+        if (s.vitesse) r.append(el("span", {text:"vit. " + s.vitesse}));
+        li.append(r);
+      }
+      if (s && s.pourquoi && $("#explique").checked) li.append(el("span", {class:"why", text:"Pourquoi : " + s.pourquoi}));
+      ol.append(li);
+    });
+    compSec.append(el("div", {class:"comp", style:"margin-top:18px"},
+      el("h4", {style:"margin:0;font-size:17px", text:c.nom}),
+      el("div", {class:"tblwrap"}, el("table", {}, el("thead", {}, el("tr", {}, el("th", {text:"Ingrédient"}), el("th", {class:"n", text:"Poids"}))), tb)),
+      ol));
+  });
+  root.append(compSec);
+
+  // Équilibrage
+  const balSec = el("section", {class:"blk"}, el("h3", {text:"Équilibrage"}));
+  if (isGla){
+    const t = totaux(allIngs);
+    balSec.append(el("p", {class:"sub", text:"Calculé par la page à partir de la composition de chaque ingrédient. Repères indicatifs pour une vitrine à -11/-12 °C, à régler selon votre méthode."}));
+    const grid = el("div", {class:"bal"});
+    CIBLES[sousType].forEach(c => {
+      const v = t[c.k], s = statut(v, c);
+      const pos = x => Math.max(0, Math.min(100, (x - c.lo)/(c.hi - c.lo)*100));
+      const bar = el("div", {class:"bar", role:"img", "aria-label": c.n + " " + fmt(v,1) + c.u + ", cible " + c.min + " à " + c.max});
+      bar.append(el("div", {class:"zone", style:"left:"+pos(c.min)+"%;width:"+(pos(c.max)-pos(c.min))+"%"}), el("div", {class:"dot", style:"left:"+pos(v)+"%"}));
+      grid.append(el("div", {class:"gauge"},
+        el("div", {class:"top"}, el("span", {class:"name", text:c.n}), el("span", {class:"st " + s, text:ST_LBL[s]})),
+        el("span", {class:"val", text: fmt(v, c.u ? 1 : 0) + (c.u ? " " + c.u : "")}),
+        bar,
+        el("div", {class:"tgt"}, el("span", {text:"Cible " + c.min + " – " + c.max + (c.u?" "+c.u:"")}))));
+    });
+    balSec.append(grid);
+  } else {
+    balSec.append(el("p", {class:"sub", text:"Composition de chaque préparation, calculée par la page à partir des ingrédients."}));
+    const g = el("div", {class:"compgrid"});
+    (f.composants||[]).forEach(c => {
+      const t = totaux(c.ingredients||[]);
+      const autres = Math.max(0, t.es - t.sucres - t.mg);
+      const parts = [["eau",t.eau,"#5B8FB9"],["sucres",t.sucres,"var(--rasp)"],["mg",t.mg,"#D9A441"],["autres",autres,"var(--accent)"]];
+      const stack = el("div", {class:"stack", role:"img", "aria-label":"Eau " + fmt(t.eau,0) + " %, sucres " + fmt(t.sucres,0) + " %, matières grasses " + fmt(t.mg,0) + " %"});
+      parts.forEach(p => stack.append(el("i", {style:"width:"+Math.max(0,p[1])+"%;background:"+p[2]})));
+      const leg = el("div", {class:"legend"});
+      [["Eau",t.eau,"#5B8FB9"],["Sucres",t.sucres,"var(--rasp)"],["MG",t.mg,"#D9A441"],["Autres ES",autres,"var(--accent)"]].forEach(p => {
+        const s = el("span"); s.append(el("b", {style:"background:"+p[2]}), p[0] + " " + fmt(p[1],0) + " %"); leg.append(s);
+      });
+      g.append(el("div", {class:"ccard"}, el("h4", {text:c.nom}), stack, leg));
+    });
+    balSec.append(g);
+  }
+  // Points de contrôle
+  if ((f.controles||[]).length){
+    const ch = el("div", {class:"checks", style:"margin-top:16px"});
+    f.controles.forEach(c => {
+      const s = ["ok","attention","hors"].includes(c.statut) ? c.statut : "attention";
+      ch.append(el("div", {class:"check"}, el("span", {class:"st " + s, text:ST_LBL[s]}),
+        el("div", {}, el("div", {class:"t", text:c.label + " : " + (c.valeur||"") + (c.cible ? "  (repère " + c.cible + ")" : "")}), c.detail ? el("div", {class:"d", text:c.detail}) : null)));
+    });
+    balSec.append(el("h4", {style:"margin:20px 0 0;font-size:15px", text:"Points de contrôle technique"}), ch);
+  }
+  root.append(balSec);
+
+  // Conseils
+  const two = el("div", {class:"two"});
+  const mk = (titre, arr) => { const ul = el("ul", {class:"tips"}); (arr||[]).forEach(t => ul.append(el("li", {text:t}))); return el("div", {}, el("h4", {style:"margin:0 0 8px;font-size:15px", text:titre}), ul); };
+  if ((f.conseils||[]).length) two.append(mk("Conseils techniques", f.conseils));
+  if ((f.erreurs||[]).length) two.append(mk("Erreurs fréquentes", f.erreurs));
+  const cs = el("section", {class:"blk"}, el("h3", {text:"Transmission"}), two);
+  if (f.conservation) cs.append(el("p", {class:"note", text:"Conservation (estimation à valider par essai et selon le GBPH) : " + f.conservation}));
+  root.append(cs);
+}
+
+/* ---------- Exemples, options ---------- */
+function showExample(k){ fiche = EXEMPLES[k]; isExample = true; facteur = 1; currentId = null; render(); renderSaved(); }
+$("#explique").addEventListener("change", render);
+document.querySelectorAll("#contraintes .chip").forEach(b => b.addEventListener("click", () => b.setAttribute("aria-pressed", String(b.getAttribute("aria-pressed") !== "true"))));
+
+/* ---------- Génération IA ---------- */
+async function callAI(prompt, opts){
+  const res = await fetch("/api/generate", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({prompt}), signal: opts.signal});
+  if (!res.ok || !res.body){
+    let m = "HTTP " + res.status;
+    try { const j = await res.json(); m = (j.error && (j.error.message || j.error)) || m; } catch(e){}
+    throw {code:"api", message:String(m)};
+  }
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = "", text = "", stop = null;
+  for (;;){
+    const {value, done} = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, {stream:true});
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0){
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      if (!line.startsWith("data:")) continue;
+      const p = line.slice(5).trim(); if (!p) continue;
+      let ev; try { ev = JSON.parse(p); } catch(e){ continue; }
+      if (ev.type === "content_block_delta" && ev.delta && ev.delta.type === "text_delta"){ text += ev.delta.text; if (opts.onText) opts.onText(text); }
+      else if (ev.type === "message_delta" && ev.delta) stop = ev.delta.stop_reason;
+      else if (ev.type === "error") throw {code:"api", message:(ev.error && ev.error.message) || "Erreur API"};
+    }
+  }
+  if (stop === "max_tokens") throw {code:"truncated"};
+  return text;
+}
+function parseFiche(text){
+  const a = text.indexOf("{"), b = text.lastIndexOf("}");
+  if (a < 0 || b <= a) throw {code:"format"};
+  try { return JSON.parse(text.slice(a, b + 1)); } catch(e){ throw {code:"format"}; }
+}
+
+function buildPrompt(){
+  const demande = $("#demande").value.trim();
+  const qte = $("#qte").value.trim();
+  const materiel = $("#materiel").value;
+  const contraintes = [...document.querySelectorAll("#contraintes .chip[aria-pressed=true]")].map(b => b.textContent);
+  return `Tu es un chef pâtissier-glacier et formateur français avec 20 ans d'expérience. Tu construis une fiche technique ORIGINALE, juste techniquement et réalisable en laboratoire.
+
+DEMANDE : ${demande}
+QUANTITÉ SOUHAITÉE : ${qte || "non précisée : choisis un rendement professionnel courant (ex. 8 parts en pâtisserie, 1000 g de mix en glacerie)"}
+NIVEAU : expert, qualité professionnelle. La fiche est un support technique ; le formateur construit lui-même son cours.
+CONTRAINTES : ${contraintes.length ? contraintes.join(", ") : "aucune"}
+MATÉRIEL : ${materiel === "robot" ? "robot cuiseur multifonction : pour chaque étape faite au robot, renseigne temp (ex. \"90 °C\"), vitesse (ex. \"3\") et duree (ex. \"6 min\")" : "laboratoire classique (pas de champs temp/vitesse/duree obligatoires)"}
+
+DOMAINE : détermine toi-même d'après la demande.
+- "glacerie" pour une crème glacée, une glace ou un sorbet (sous_type "creme_glacee" ou "sorbet"). Rendement exprimé en "g de mix".
+- "patisserie" pour tout le reste (y compris un entremets glacé : la partie glacée devient alors un composant). Rendement exprimé en "parts".
+
+RÈGLES :
+- N'utilise jamais de guillemets doubles à l'intérieur des textes ; utilise « » à la place.
+- Reste concis : 5 composants au maximum, étapes courtes, pas de texte superflu, pour que la fiche tienne en une réponse.
+- Pour CHAQUE étape, ajoute "pourquoi" : une phrase courte qui explique la raison technique du geste (chimie, physique, hygiène).
+- Tout en français, poids en grammes (nombres), aucune unité de volume.
+- Pour CHAQUE ingrédient, donne sa composition moyenne réaliste pour 100 g (tables de composition usuelles) : eau, sucres (tous sucres), mg (matières grasses), es (extrait sec total = 100 - eau).
+- En glacerie uniquement, ajoute aussi pour chaque ingrédient : esl (extrait sec lactique non gras : protéines + lactose + minéraux du lait uniquement), pac et pod en points par gramme d'ingrédient, saccharose = 1 (ex. dextrose pac 1.9 pod 0.7 ; sucre inverti pac 1.9 pod 1.3 ; glucose atomisé DE 40 pac 0.8 pod 0.4 ; lait entier pac 0.048 pod 0.008).
+- En glacerie, équilibre le mix : crème glacée sucres 16-22 %, MG 6-12 %, ESL 8-11 %, ES 32-42 %, PAC 240-290, POD 150-200 (PAC et POD calculés pour 1000 g) ; sorbet sucres 24-32 %, ES 28-36 %, PAC 250-320. Vérifie tes calculs. La somme des g du mix doit être égale au rendement.
+- En pâtisserie, plusieurs composants si la recette l'exige (fond, insert, mousse, glaçage...).
+- AVANT de répondre, vérifie tout ce qui pourrait faire échouer la recette : surdosage ou sous-dosage (gélifiants, sel, levure, sucre), incohérence entre la demande et la recette, contrainte non respectée, température ou durée de cuisson manquante, ingrédient incompatible avec la congélation ou l'acidité, chiffres faux. Si la demande contient une erreur (dosage irréaliste, association impossible), corrige-la et explique-la dans "corrections" (tableau vide si aucune correction).
+- Toute cuisson doit indiquer une température, une durée INDICATIVE et un indicateur de fin observable (champ "fin" : couleur, texture, température à cœur), car la durée dépend du four.
+- "corrections" : chaque correction est un objet {"element","avant","apres","raison","consequence"}. Ne modifie jamais la demande en silence.
+- "conservation" : n'invente pas de durée. Donne les conditions (froid positif, congélation) et, si tu proposes une durée, écris qu'il s'agit d'une estimation à valider par essai et selon le GBPH.
+- Si deux exigences de la demande sont incompatibles, dis-le dans "corrections" et propose le meilleur compromis au lieu de produire une recette artificiellement cohérente.
+- controles : 3 à 5 points de contrôle technique chiffrés (températures, ratios de gélifiant, ratios clés), avec valeur, cible, statut \"ok\" ou \"attention\" et un detail court.
+- conseils : 2 à 4 conseils techniques de professionnel. erreurs : 2 à 3 erreurs fréquentes avec leur cause.
+
+Réponds UNIQUEMENT avec un objet JSON valide, sans texte autour, au format :
+{"titre":"","type":"patisserie|glacerie","sous_type":"creme_glacee|sorbet (glacerie uniquement)","description":"une phrase","rendement":{"valeur":0,"unite":"parts|g de mix"},"materiel":"${materiel}",
+"composants":[{"nom":"","ingredients":[{"nom":"","g":0,"eau":0,"sucres":0,"mg":0,"es":0,"esl":0,"pac":0,"pod":0}],"etapes":[{"texte":"","pourquoi":"","fin":"(cuissons uniquement)"${materiel === "robot" ? ",\"temp\":\"\",\"vitesse\":\"\",\"duree\":\"\"" : ""}}]}],
+"controles":[{"label":"","valeur":"","cible":"","statut":"ok","detail":""}],
+"corrections":[{"element":"","avant":"","apres":"","raison":"","consequence":""}],"conseils":[""],"erreurs":[""],"conservation":""}`;
+}
+
+const MSG = {
+  truncated:"La fiche était trop longue et a été coupée. Simplifiez la demande (moins de composants) puis relancez.",
+  not_granted:"Autorisation refusée : la génération utilise votre compte Claude. Rechargez la page pour réessayer.",
+  rate_limited:"Trop de demandes rapprochées. Patientez une minute puis relancez.",
+  cancelled:"Génération arrêtée.",
+  prompt_too_large:"Demande trop longue : raccourcissez la description.",
+};
+
+$("#form").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const st = $("#status"), go = $("#go");
+  if (!$("#demande").value.trim()){ st.className = "status err"; st.textContent = "Décrivez la recette à construire."; $("#demande").focus(); return; }
+  go.disabled = true; go.replaceChildren(el("span", {class:"spin", "aria-hidden":"true"}), "Construction en cours…");
+  st.className = "status"; st.textContent = "Le chef réfléchit à l'équilibre de la recette… 0 s";
+  const t0 = Date.now();
+  const ctl = new AbortController();
+  let written = 0, timedOut = false;
+  const stopBtn = $("#stop"); stopBtn.hidden = false; stopBtn.onclick = () => ctl.abort();
+  const tick = setInterval(() => {
+    const sec = Math.round((Date.now()-t0)/1000);
+    st.textContent = (written ? "Rédaction de la fiche… " + fmt(written) + " caractères" : "Le chef réfléchit à l'équilibre de la recette…") + " · " + sec + " s";
+    if (sec >= 240){ timedOut = true; ctl.abort(); }
+  }, 1000);
+  try {
+    const data = parseFiche(await callAI(buildPrompt(), {signal: ctl.signal, onText: t => { written = t.length; }}));
+    if (!data || !Array.isArray(data.composants) || !data.composants.length) throw {code:"format"};
+    data.demande = $("#demande").value.trim(); data.qteDemandee = $("#qte").value.trim();
+    data.contraintes = [...document.querySelectorAll("#contraintes .chip[aria-pressed=true]")].map(b => b.textContent);
+    data.type = (data.type === "glacerie" || data.sous_type === "sorbet" || data.sous_type === "creme_glacee") ? "glacerie" : "patisserie";
+    fiche = data; isExample = false; facteur = 1; currentId = null;
+    const savedOk = await saveFiche(data);
+    render();
+    st.textContent = "Fiche construite en " + Math.round((Date.now()-t0)/1000) + " s" + (savedOk ? " et enregistrée dans Mes recettes." : ". Relisez-la avant usage.");
+    $("#fiche").scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block:"start"});
+  } catch(e){
+    st.className = "status err";
+    if (timedOut){ st.textContent = "La génération a dépassé 4 minutes. Relancez, ou simplifiez la demande (moins de composants)."; return; }
+    if (e && e.name === "AbortError") e = {code:"cancelled"};
+    if (e && e.code === "api"){ st.textContent = "Erreur du service IA : " + e.message; return; }
+    st.textContent = (e && MSG[e.code]) || (e && e.code === "format" ? "La réponse n'a pas pu être lue comme une fiche. Relancez la génération." : "La génération a échoué (" + ((e && e.code) || "erreur inconnue") + "). Relancez dans un instant.");
+  } finally {
+    clearInterval(tick); stopBtn.hidden = true;
+    go.disabled = false; go.textContent = "Construire la fiche";
+  }
+});
+
+/* ---------- Export PDF ---------- */
+async function exportPdf(){
+  const st = $("#status");
+  if (!window.jspdf){ st.className = "status err"; st.textContent = "Le module PDF n'a pas pu se charger. Rechargez la page."; return; }
+  const f = fiche, isGla = f.type === "glacerie";
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:"mm", format:"a4"});
+  const clean = s => String(s == null ? "" : s).replace(/[–—]/g,"-").replace(/[’]/g,"'").replace(/[≈]/g,"~").replace(/ | /g," ");
+  const W = 210, M = 16; let y = 18;
+  const need = h => { if (y + h > 282){ doc.addPage(); y = 18; } };
+  const text = (s, size=10, style="normal", indent=0, color=[22,32,28]) => {
+    doc.setFont("helvetica", style); doc.setFontSize(size); doc.setTextColor(...color);
+    const lines = doc.splitTextToSize(clean(s), W - 2*M - indent);
+    lines.forEach(l => { need(size*0.45); doc.text(l, M + indent, y); y += size*0.45; });
+  };
+  doc.setFillColor(47,107,74); doc.rect(0,0,W,10,"F");
+  doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(255,255,255); doc.text("TOQUELAB  ·  FICHE TECHNIQUE", M, 6.5);
+  text(f.titre, 18, "bold"); y += 1;
+  const base = num(f.rendement && f.rendement.valeur) || 1;
+  text((isGla ? "Glacerie" : "Pâtisserie") + ""+"  ·  Rendement " + fmt(Math.round(base*facteur)) + " " + ((f.rendement&&f.rendement.unite)||""), 10, "normal", 0, [90,107,99]);
+  if (f.description) text(f.description, 10, "italic", 0, [90,107,99]);
+  y += 3;
+  const all = [];
+  (f.composants||[]).forEach(c => {
+    need(14); y += 2; text(c.nom, 12, "bold"); y += 1;
+    (c.ingredients||[]).forEach(i => {
+      const g = num(i.g)*facteur; all.push({...i, g});
+      need(5); doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor(22,32,28);
+      doc.text(clean(i.nom), M + 2, y); doc.text(fmtG(g).replace(/ | /g," ") + " g", W - M, y, {align:"right"}); y += 4.6;
+    });
+    y += 1;
+    (c.etapes||[]).forEach((s, k) => {
+      let t = (k+1) + ". " + (typeof s === "string" ? s : s.texte || "");
+      if (s && s.fin) t += "  (fin : " + s.fin + ")";
+      if (s && (s.temp || s.vitesse || s.duree)) t += "  [" + [s.duree, s.temp, s.vitesse ? "vit. " + s.vitesse : ""].filter(Boolean).join(" / ") + "]";
+      text(t, 10, "normal", 2);
+      if (s && s.pourquoi && $("#explique").checked) text("Pourquoi : " + s.pourquoi, 9, "italic", 6, [90,107,99]);
+      y += 0.8;
+    });
+  });
+  if (isGla){
+    const t = totaux(all), sous = f.sous_type === "sorbet" ? "sorbet" : "creme_glacee";
+    need(14); y += 3; text("Équilibrage (calculé)", 12, "bold"); y += 1;
+    CIBLES[sous].forEach(c => { const v = t[c.k]; text(c.n + " : " + fmt(v, c.u?1:0) + (c.u?" "+c.u:"") + "   (cible " + c.min + "-" + c.max + ")   " + ST_LBL[statut(v,c)], 10, "normal", 2); });
+  }
+  { const al = auditFiche(f), cf = niveauConfiance(f, al); need(14); y += 3; text("Vérifications ToqueLab", 12, "bold"); y += 1;
+    text("Niveau de confiance " + cf.n + " - " + cf.lbl + " : " + cf.d, 10, "bold", 2);
+    (f.corrections||[]).forEach(c => text("Correction : " + corrTxt(c), 10, "normal", 2));
+    if (!al.length) text("Aucun risque détecté par les contrôles automatiques.", 10, "normal", 2);
+    al.forEach(a => text((a.niveau === "hors" ? "RISQUE - " : "À vérifier - ") + a.titre + " : " + a.detail, 10, "normal", 2)); }
+  if ((f.controles||[]).length){ need(14); y += 3; text("Points de contrôle", 12, "bold"); y += 1;
+    f.controles.forEach(c => text("- " + c.label + " : " + (c.valeur||"") + (c.cible ? " (repère " + c.cible + ")" : "") + (c.detail ? ". " + c.detail : ""), 10, "normal", 2)); }
+  if ((f.conseils||[]).length){ need(14); y += 3; text("Conseils techniques", 12, "bold"); y += 1; f.conseils.forEach(c => text("- " + c, 10, "normal", 2)); }
+  if ((f.erreurs||[]).length){ need(14); y += 3; text("Erreurs fréquentes", 12, "bold"); y += 1; f.erreurs.forEach(c => text("- " + c, 10, "normal", 2)); }
+  if (f.conservation){ y += 3; text("Conservation (estimation à valider par essai et selon le GBPH) : " + f.conservation, 10, "italic"); }
+  const pages = doc.getNumberOfPages();
+  for (let p = 1; p <= pages; p++){ doc.setPage(p); doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(120,130,125);
+    doc.text("ToqueLab - fiche à valider par un professionnel avant usage", M, 290); doc.text(p + "/" + pages, W - M, 290, {align:"right"}); }
+  const name = "ToqueLab - " + clean(f.titre || "fiche").replace(/[\\/:*?"<>|]/g,"").slice(0,60) + ".pdf";
+  try { doc.save(name); st.className = "status"; st.textContent = "Fiche PDF téléchargée."; }
+  catch(e){ st.className = "status err"; st.textContent = "Le PDF n'a pas pu être créé."; }
+}
+
+/* ---------- Mes recettes (sauvegarde dans ce navigateur) ---------- */
+const LS_KEY = "toquelab_fiches_v1";
+let currentId = null, pendingDel = null, savedDocs = [];
+const TYPE_LBL = {patisserie:"Pâtisserie", glacerie:"Glacerie"};
+function loadAll(){ try { const a = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); return Array.isArray(a) ? a : []; } catch(e){ return []; } }
+function saveAll(){ try { localStorage.setItem(LS_KEY, JSON.stringify(savedDocs)); return true; } catch(e){ return false; } }
+async function saveFiche(data){
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  savedDocs.unshift({id, titre: String(data.titre || "Fiche sans titre").slice(0,160), type: data.type, createdAt: Date.now(), fiche: JSON.parse(JSON.stringify(data))});
+  if (!saveAll()){ savedDocs.shift(); $("#saved-msg").textContent = "Stockage du navigateur plein ou bloqué : supprimez d'anciennes fiches."; return false; }
+  currentId = id; renderSaved(); return true;
+}
+function renderSaved(){
+  const ul = $("#saved-list"); ul.replaceChildren();
+  $("#saved-count").textContent = savedDocs.length ? String(savedDocs.length) : "";
+  savedDocs.forEach(v => {
+    const li = el("li", {class: v.id === currentId ? "cur" : ""});
+    const date = new Date(v.createdAt || 0).toLocaleDateString("fr-FR", {day:"numeric", month:"short", year:"numeric"});
+    const open = el("button", {type:"button", class:"open"}, el("b", {text: v.titre || "Fiche"}), el("small", {text: (TYPE_LBL[v.type] || "Fiche") + " · " + date}));
+    open.addEventListener("click", () => {
+      if (!v.fiche) return;
+      fiche = JSON.parse(JSON.stringify(v.fiche)); isExample = false; facteur = 1; currentId = v.id; pendingDel = null;
+      render(); renderSaved();
+      if (matchMedia("(max-width:880px)").matches) $("#fiche").scrollIntoView({block:"start"});
+    });
+    const del = el("button", {type:"button", class:"del" + (pendingDel === v.id ? " confirm" : ""), text: pendingDel === v.id ? "Confirmer" : "Supprimer", "aria-label":"Supprimer " + (v.titre || "la fiche")});
+    del.addEventListener("click", () => {
+      if (pendingDel !== v.id){ pendingDel = v.id; renderSaved(); return; }
+      pendingDel = null;
+      savedDocs = savedDocs.filter(x => x.id !== v.id); saveAll(); renderSaved();
+    });
+    li.append(open, del); ul.append(li);
+  });
+  if (!savedDocs.length) ul.append(el("li", {style:"border-style:dashed;color:var(--muted);font-size:14px;padding:10px", text:"Aucune fiche enregistrée pour l'instant."}));
+}
+savedDocs = loadAll();
+$("#saved-msg").textContent = "Chaque fiche construite est enregistrée automatiquement dans ce navigateur.";
+renderSaved();
+
+fiche = EXEMPLES.patisserie;
+render();
+})();
+</script>
+
 </body>
 </html>
