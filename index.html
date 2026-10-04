@@ -301,19 +301,21 @@ const EXEMPLES = {
 
 /* ---------- Repères d'équilibrage (indicatifs) ---------- */
 const CIBLES = {
+  // Calées sur des recettes professionnelles de référence (voir regles-technologiques-calibrage.md).
+  // PAC : à affiner selon la température de service. POD : goût, jamais un risque d'échec (gout:true).
   creme_glacee:[
-    {k:"sucres", n:"Sucres", u:"%", min:16, max:22, lo:0, hi:40},
+    {k:"sucres", n:"Sucres (lactose compris)", u:"%", min:20, max:26, lo:0, hi:40},
     {k:"mg", n:"Matières grasses", u:"%", min:6, max:12, lo:0, hi:20},
-    {k:"esl", n:"ESL (extrait sec lactique non gras)", u:"%", min:8, max:11, lo:0, hi:16},
+    {k:"esl", n:"ESL (extrait sec lactique non gras)", u:"%", min:8, max:12, lo:0, hi:16},
     {k:"es", n:"Extrait sec total", u:"%", min:32, max:42, lo:15, hi:55},
-    {k:"pac", n:"PAC (pouvoir antigel)", u:"", min:240, max:290, lo:120, hi:400},
-    {k:"pod", n:"POD (pouvoir sucrant)", u:"", min:150, max:200, lo:80, hi:280}],
+    {k:"pac", n:"PAC (pouvoir antigel)", u:"", min:210, max:290, lo:120, hi:400},
+    {k:"pod", n:"POD (pouvoir sucrant)", u:"", min:150, max:200, lo:80, hi:280, gout:true}],
   sorbet:[
-    {k:"sucres", n:"Sucres", u:"%", min:24, max:32, lo:0, hi:45},
+    {k:"sucres", n:"Sucres", u:"%", min:23, max:33, lo:0, hi:45},
     {k:"mg", n:"Matières grasses", u:"%", min:0, max:2, lo:0, hi:10},
-    {k:"es", n:"Extrait sec total", u:"%", min:28, max:36, lo:10, hi:50},
-    {k:"pac", n:"PAC (pouvoir antigel)", u:"", min:250, max:320, lo:120, hi:420},
-    {k:"pod", n:"POD (pouvoir sucrant)", u:"", min:170, max:230, lo:80, hi:300}]
+    {k:"es", n:"Extrait sec total", u:"%", min:26, max:36, lo:10, hi:50},
+    {k:"pac", n:"PAC (pouvoir antigel)", u:"", min:220, max:330, lo:120, hi:420},
+    {k:"pod", n:"POD (pouvoir sucrant)", u:"", min:200, max:300, lo:80, hi:360, gout:true}]
 };
 
 /* ---------- État ---------- */
@@ -441,7 +443,7 @@ function auditFiche(f){
     const all = comps.flatMap(cp => cp.ingredients||[]), t = totaux(all);
     const r = num(f.rendement && f.rendement.valeur);
     if (r && Math.abs(t.g - r)/r > 0.05) add("attention", "Total du mix différent du rendement", fmt(Math.round(t.g)) + " g d'ingrédients pour " + fmt(r) + " g annoncés.");
-    CIBLES[f.sous_type === "sorbet" ? "sorbet" : "creme_glacee"].forEach(c => { const s = statut(t[c.k], c); if (s === "hors") add("hors", c.n + " hors cible", fmt(t[c.k], c.u?1:0) + (c.u?" "+c.u:"") + " pour une cible de " + c.min + " à " + c.max + "."); });
+    CIBLES[f.sous_type === "sorbet" ? "sorbet" : "creme_glacee"].forEach(c => { const s = statut(t[c.k], c); if (s === "hors") add(c.gout ? "attention" : "hors", c.n + " hors cible", fmt(t[c.k], c.u?1:0) + (c.u?" "+c.u:"") + " pour une cible de " + c.min + " à " + c.max + "." + (c.gout ? " Effet sur le goût (plus ou moins sucré), pas sur la tenue." : "")); });
   }
   return out;
 }
@@ -688,7 +690,9 @@ RÈGLES :
 - Tout en français, poids en grammes (nombres), aucune unité de volume.
 - Pour CHAQUE ingrédient, donne sa composition moyenne réaliste pour 100 g (tables de composition usuelles) : eau, sucres (tous sucres), mg (matières grasses), es (extrait sec total = 100 - eau).
 - En glacerie uniquement, ajoute aussi pour chaque ingrédient : esl (extrait sec lactique non gras : protéines + lactose + minéraux du lait uniquement), pac et pod en points par gramme d'ingrédient, saccharose = 1 (ex. dextrose pac 1.9 pod 0.7 ; sucre inverti pac 1.9 pod 1.3 ; glucose atomisé DE 40 pac 0.8 pod 0.4 ; lait entier pac 0.048 pod 0.008).
-- En glacerie, équilibre le mix : crème glacée sucres 16-22 %, MG 6-12 %, ESL 8-11 %, ES 32-42 %, PAC 240-290, POD 150-200 (PAC et POD calculés pour 1000 g) ; sorbet sucres 24-32 %, ES 28-36 %, PAC 250-320. Vérifie tes calculs. La somme des g du mix doit être égale au rendement.
+- En glacerie, équilibre le mix : crème glacée sucres totaux lactose compris 20-26 %, MG 6-12 %, ESL 8-12 %, ES 32-42 %, PAC 210-290, POD 150-200 (PAC et POD calculés pour 1000 g) ; sorbet sucres 23-33 % (28 à 32 °Brix), ES 26-36 %, PAC 220-330, POD 200-300. Vérifie tes calculs. La somme des g du mix doit être égale au rendement.
+- Alcool en glacerie : alcool pur (g) = poids de la boisson × % vol × 0,8 ; son PAC vaut 7,4 par g d'alcool pur et il ne compte pas dans l'extrait sec ; il s'ajoute après la pasteurisation, dans le mix refroidi.
+- Sorbet à plusieurs fruits : le Brix du mélange est la moyenne des Brix de chaque fruit pondérée par leur poids ; précise si la purée est nature ou sucrée.
 - En pâtisserie, plusieurs composants si la recette l'exige (fond, insert, mousse, glaçage...).
 - AVANT de répondre, vérifie tout ce qui pourrait faire échouer la recette : surdosage ou sous-dosage (gélifiants, sel, levure, sucre), incohérence entre la demande et la recette, contrainte non respectée, température ou durée de cuisson manquante, ingrédient incompatible avec la congélation ou l'acidité, chiffres faux. Si la demande contient une erreur (dosage irréaliste, association impossible), corrige-la et explique-la dans "corrections" (tableau vide si aucune correction).
 - Toute cuisson doit indiquer une température, une durée INDICATIVE et un indicateur de fin observable (champ "fin" : couleur, texture, température à cœur), car la durée dépend du four.
