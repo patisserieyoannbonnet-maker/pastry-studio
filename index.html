@@ -313,7 +313,7 @@ const CIBLES = {
   sorbet:[
     {k:"sucres", n:"Sucres", u:"%", min:23, max:33, lo:0, hi:45},
     {k:"mg", n:"Matières grasses", u:"%", min:0, max:2, lo:0, hi:10},
-    {k:"es", n:"Extrait sec total", u:"%", min:26, max:36, lo:10, hi:50},
+    {k:"es", n:"Extrait sec total", u:"%", min:30, max:34, lo:10, hi:50},
     {k:"pac", n:"PAC (pouvoir antigel)", u:"", min:220, max:330, lo:120, hi:420},
     {k:"pod", n:"POD (pouvoir sucrant)", u:"", min:200, max:300, lo:80, hi:360, gout:true}]
 };
@@ -443,9 +443,28 @@ function auditFiche(f){
     const all = comps.flatMap(cp => cp.ingredients||[]), t = totaux(all);
     const r = num(f.rendement && f.rendement.valeur);
     if (r && Math.abs(t.g - r)/r > 0.05) add("attention", "Total du mix différent du rendement", fmt(Math.round(t.g)) + " g d'ingrédients pour " + fmt(r) + " g annoncés.");
+    if (f.sous_type === "sorbet" && t.g){
+      const FRUIT = /puree|pulpe|fraise|framboise|mangue|passion|abricot|peche|poire|pomme|cassis|myrtille|mure|cerise|griotte|citron|orange|pamplemousse|mandarine|ananas|banane|kiwi|litchi|melon|pasteque|figue|prune|goyave|rhubarbe|groseille|raisin|coing|grenade|fruit/;
+      const fruits = all.filter(i => FRUIT.test(norm(i.nom)) && !/alcool|liqueur|eau.de.vie|sirop|arome|zeste/.test(norm(i.nom)));
+      const pf = fruits.reduce((s,i)=>s+num(i.g),0) / t.g * 100;
+      const main = fruits.slice().sort((a,b)=>num(b.g)-num(a.g))[0];
+      const acide = main && /citron|passion|cassis|ananas|banane|orange|pamplemousse|groseille|rhubarbe/.test(norm(main.nom));
+      const plein = /plein fruit/.test(norm((f.titre||"") + " " + (f.description||"") + " " + (f.demande||"")));
+      const leg = acide ? 15 : 25, legPF = acide ? 20 : 45, std = acide ? 45 : 55;
+      if (pf < leg) add("hors", "Dénomination « sorbet » non conforme", fmt(pf,0) + " % de fruit, minimum " + leg + " %" + (acide ? " pour un fruit acide ou à saveur forte" : "") + " (Code des pratiques loyales des glaces).");
+      else if (plein && pf < legPF) add("hors", "Dénomination « plein fruit » non conforme", fmt(pf,0) + " % de fruit, minimum " + legPF + " % (Code des pratiques loyales des glaces).");
+      else if (plein && pf < std) add("attention", "Part de fruit sous le standard professionnel", fmt(pf,0) + " % de fruit ; standard retenu pour un sorbet plein fruit : " + std + " %" + (acide ? " (fruit acide ou à saveur forte)" : "") + ".");
+    }
     CIBLES[f.sous_type === "sorbet" ? "sorbet" : "creme_glacee"].forEach(c => { const s = statut(t[c.k], c); if (s === "hors") add(c.gout ? "attention" : "hors", c.n + " hors cible", fmt(t[c.k], c.u?1:0) + (c.u?" "+c.u:"") + " pour une cible de " + c.min + " à " + c.max + "." + (c.gout ? " Effet sur le goût (plus ou moins sucré), pas sur la tenue." : "")); });
   }
   return out;
+}
+// En glacerie, l'équilibrage est calculé par le code : on n'affiche pas les mêmes chiffres estimés par l'IA,
+// qui peuvent différer (deux valeurs pour une même mesure sur une fiche).
+function ctrlVisibles(f){
+  const l = f.controles || [];
+  if (f.type !== "glacerie") return l;
+  return l.filter(c => !/sucre|extrait sec|\bes\b|\bpac\b|\bpod\b|matiere.? grasse|\bmg\b|\besl\b|brix/.test(norm(c.label)));
 }
 function corrTxt(c){
   if (!c) return "";
@@ -586,9 +605,9 @@ function render(){
     balSec.append(g);
   }
   // Points de contrôle
-  if ((f.controles||[]).length){
+  if (ctrlVisibles(f).length){
     const ch = el("div", {class:"checks", style:"margin-top:16px"});
-    f.controles.forEach(c => {
+    ctrlVisibles(f).forEach(c => {
       const s = ["ok","attention","hors"].includes(c.statut) ? c.statut : "attention";
       ch.append(el("div", {class:"check"}, el("span", {class:"st " + s, text:ST_LBL[s]}),
         el("div", {}, el("div", {class:"t", text:c.label + " : " + (c.valeur||"") + (c.cible ? "  (repère " + c.cible + ")" : "")}), c.detail ? el("div", {class:"d", text:c.detail}) : null)));
@@ -696,8 +715,9 @@ RÈGLES :
 - Tout en français, poids en grammes (nombres), aucune unité de volume.
 - Pour CHAQUE ingrédient, donne sa composition moyenne réaliste pour 100 g (tables de composition usuelles) : eau, sucres (tous sucres), mg (matières grasses), es (extrait sec total = 100 - eau).
 - En glacerie uniquement, ajoute aussi pour chaque ingrédient : esl (extrait sec lactique non gras : protéines + lactose + minéraux du lait uniquement), pac et pod en points par gramme d'ingrédient, saccharose = 1 (ex. dextrose pac 1.9 pod 0.7 ; sucre inverti pac 1.9 pod 1.3 ; glucose atomisé DE 40 pac 0.8 pod 0.4 ; lait entier pac 0.048 pod 0.008).
-- En glacerie, équilibre le mix : crème glacée sucres totaux lactose compris 20-26 %, MG 6-12 %, ESL 8-12 %, ES 32-42 %, PAC 210-290, POD 150-200 (PAC et POD calculés pour 1000 g) ; sorbet sucres 23-33 % (28 à 32 °Brix), ES 26-36 %, PAC 220-330, POD 200-300. Vérifie tes calculs. La somme des g du mix doit être égale au rendement.
+- En glacerie, équilibre le mix : crème glacée sucres totaux lactose compris 20-26 %, MG 6-12 %, ESL 8-12 %, ES 32-42 %, PAC 210-290, POD 150-200 (PAC et POD calculés pour 1000 g) ; sorbet sucres 23-33 %, ES 31-33 % (32 °Brix au réfractomètre), PAC 220-330, POD 200-300. Vérifie tes calculs. La somme des g du mix doit être égale au rendement.
 - Alcool en glacerie : alcool pur (g) = poids de la boisson × % vol × 0,8 ; son PAC vaut 7,4 par g d'alcool pur et il ne compte pas dans l'extrait sec ; il s'ajoute après la pasteurisation, dans le mix refroidi.
+- Sorbet, standard ToqueLab : extrait sec 32 %. Sorbet plein fruit : 55 % de fruit (45 % pour les fruits acides ou à saveur forte : passion, citron, cassis, ananas, banane) ; minimum légal : sorbet 25 % (15 %), plein fruit 45 % (20 %). Structure type pour 1000 g de sorbet plein fruit : purée de fruit 550 g, saccharose environ 200 g, glucose atomisé environ 60 g, sucre inverti environ 20 g, stabilisateur 3 g, eau pour compléter ; ajuste le sucre et l'eau selon le Brix de la purée et indique-le dans le nom de l'ingrédient (ex. « Purée de fraise nature 7 °Brix »). Méthode : stabilisateur mélangé à une partie du sucre, sirop (eau, sucres, stabilisateur) porté à 85 °C minimum puis refroidi rapidement à 4 °C, purée ajoutée à froid, mixer, maturation 4 h minimum à 4 °C, mixer de nouveau, contrôler 32 °Brix au réfractomètre, turbiner, stocker à -18 °C. Si la purée est crue, ne présente pas le mix comme pasteurisé.
 - Sorbet à plusieurs fruits : le Brix du mélange est la moyenne des Brix de chaque fruit pondérée par leur poids ; précise si la purée est nature ou sucrée.
 - En pâtisserie, plusieurs composants si la recette l'exige (fond, insert, mousse, glaçage...).
 - AVANT de répondre, vérifie tout ce qui pourrait faire échouer la recette : surdosage ou sous-dosage (gélifiants, sel, levure, sucre), incohérence entre la demande et la recette, contrainte non respectée, température ou durée de cuisson manquante, ingrédient incompatible avec la congélation ou l'acidité, chiffres faux. Si la demande contient une erreur (dosage irréaliste, association impossible), corrige-la et explique-la dans "corrections" (tableau vide si aucune correction).
@@ -816,8 +836,8 @@ async function exportPdf(){
     (f.corrections||[]).forEach(c => text("Correction : " + corrTxt(c), 10, "normal", 2));
     if (!al.length) text("Aucun risque détecté par les contrôles automatiques.", 10, "normal", 2);
     al.forEach(a => text((a.niveau === "hors" ? "RISQUE - " : "À vérifier - ") + a.titre + " : " + a.detail, 10, "normal", 2)); }
-  if ((f.controles||[]).length){ need(14); y += 3; text("Points de contrôle", 12, "bold"); y += 1;
-    f.controles.forEach(c => text("- " + c.label + " : " + (c.valeur||"") + (c.cible ? " (repère " + c.cible + ")" : "") + (c.detail ? ". " + c.detail : ""), 10, "normal", 2)); }
+  if (ctrlVisibles(f).length){ need(14); y += 3; text("Points de contrôle", 12, "bold"); y += 1;
+    ctrlVisibles(f).forEach(c => text("- " + c.label + " : " + (c.valeur||"") + (c.cible ? " (repère " + c.cible + ")" : "") + (c.detail ? ". " + c.detail : ""), 10, "normal", 2)); }
   if ((f.conseils||[]).length){ need(14); y += 3; text("Conseils techniques", 12, "bold"); y += 1; f.conseils.forEach(c => text("- " + c, 10, "normal", 2)); }
   if ((f.erreurs||[]).length){ need(14); y += 3; text("Erreurs fréquentes", 12, "bold"); y += 1; f.erreurs.forEach(c => text("- " + c, 10, "normal", 2)); }
   if (f.conservation){ y += 3; text("Conservation (estimation à valider par essai et selon le GBPH) : " + f.conservation, 10, "italic"); }
