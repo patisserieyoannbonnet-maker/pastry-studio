@@ -2,7 +2,12 @@
 export const config = { runtime: "edge" };
 
 const MODEL = "claude-sonnet-5";
-const MAX_TOKENS = 16000; // la réflexion éventuelle du modèle compte dans cette limite
+const MAX_TOKENS = 10000; // plafond de sécurité : une fiche complète fait en général 2 000 à 6 000 jetons
+// Sur claude-sonnet-5, la réflexion (thinking) est active par défaut : elle est facturée et compte dans
+// MAX_TOKENS. Le 4 oct. 2026 elle a consommé 16 000 jetons sans écrire la fiche. On la coupe : le code de
+// la page vérifie les calculs derrière l'IA. Alternative plus coûteuse : { type: "adaptive" } avec
+// output_config: { effort: "low" }.
+const THINKING = { type: "disabled" };
 
 function json(obj, status) {
   return new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
@@ -22,7 +27,7 @@ export default async function handler(req) {
       "x-api-key": process.env.ANTHROPIC_API_KEY,
       "anthropic-version": "2023-06-01"
     },
-    body: JSON.stringify({ model: MODEL, max_tokens: MAX_TOKENS, stream: true, messages: [{ role: "user", content: prompt }] })
+    body: JSON.stringify({ model: MODEL, max_tokens: MAX_TOKENS, thinking: THINKING, stream: true, messages: [{ role: "user", content: prompt }] })
   });
 
   if (!r.ok) {
