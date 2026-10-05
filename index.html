@@ -322,9 +322,12 @@ const CIBLES = {
 
 /* ---------- Moules (règle validée par Yoann le 5 oct. 2026) ---------- */
 // Hauteur standard 4,5 cm. Table validée : 6 pers. Ø 16, 8 pers. Ø 18, 10 pers. Ø 20, 12 pers. Ø 22.
-// Environ 32 cm² par part, calculé à partir de cette table. Cadre de référence : 57,5 × 37,5 cm.
+// Cercles : environ 32 cm² par part, calculé à partir de cette table.
+// Cadre de référence 57,5 × 37,5 cm, découpé en parts de 10 × 4 cm : 45 parts (5 × 9).
 // Montage raisonné en hauteur, biscuit environ 1 cm en général.
-const MOULE = {hauteur:4.5, cercles:{6:16, 8:18, 10:20, 12:22}, cm2ParPart:32};
+const MOULE = {hauteur:4.5, cercles:{6:16, 8:18, 10:20, 12:22}, cm2ParPart:32, part:{l:10, w:4}};
+// Nombre de parts de 10 × 4 cm dans un cadre (découpe en grille, dans le meilleur sens)
+function partsCadre(L, W){ const p = MOULE.part; return Math.max(Math.floor(L/p.l)*Math.floor(W/p.w), Math.floor(L/p.w)*Math.floor(W/p.l)); }
 function cercleRepere(n){
   if (MOULE.cercles[n]) return {d: MOULE.cercles[n], valide: true};
   return {d: Math.max(10, Math.round(Math.sqrt(n*MOULE.cm2ParPart/Math.PI))*2), valide: false};
@@ -482,8 +485,9 @@ function auditFiche(f){
         const L = num(m.longueur_cm), W = num(m.largeur_cm);
         if (!L || !W) add("attention", "Dimensions du cadre non indiquées", "Préciser la longueur et la largeur du cadre.");
         else if (parMoule){
-          const rep = Math.round(L*W/MOULE.cm2ParPart);
-          if (Math.abs(parMoule - rep)/rep > 0.2) add("attention", "Cadre et nombre de parts incohérents", "Cadre " + fmtCm(L) + " × " + fmtCm(W) + " cm pour " + fmt(parMoule) + " parts ; repère environ " + rep + " parts (32 cm² par part, avant parage).");
+          const rep = partsCadre(L, W);
+          if (!rep) add("attention", "Cadre trop petit", "Cadre " + fmtCm(L) + " × " + fmtCm(W) + " cm : moins d'une part de 10 × 4 cm.");
+          else if (Math.abs(parMoule - rep)/rep > 0.2) add("attention", "Cadre et nombre de parts incohérents", "Cadre " + fmtCm(L) + " × " + fmtCm(W) + " cm pour " + fmt(parMoule) + " parts ; repère : " + rep + " parts de 10 × 4 cm.");
         }
       } else {
         const d = num(m.diametre_cm);
@@ -545,7 +549,10 @@ function couchesTxt(m){ return couchesDe(m).map(c => (c.composant || "?") + " " 
 // Repère de moule quand le rendement est modifié : mêmes hauteurs de couches, environ 32 cm² par part
 function mouleAdapte(m, n){
   const nb = Math.max(1, Math.round(num(m.nombre)) || 1);
-  if (m.forme === "cadre") return "surface nécessaire environ " + fmt(Math.round(n*MOULE.cm2ParPart)) + " cm² (32 cm² par part)";
+  if (m.forme === "cadre"){
+    const L = num(m.longueur_cm), W = num(m.largeur_cm), parCadre = L && W ? partsCadre(L, W) : 0;
+    return "parts de 10 × 4 cm, soit " + fmt(n*MOULE.part.l*MOULE.part.w) + " cm²" + (parCadre ? ", environ " + fmt(n/parCadre, n % parCadre ? 1 : 0) + " cadre" + (n/parCadre > 1 ? "s" : "") + " de " + fmtCm(L) + " × " + fmtCm(W) + " cm" : "");
+  }
   const r = cercleRepere(Math.max(1, Math.round(n/nb)));
   return (nb > 1 ? nb + " × " : "") + "cercle Ø " + r.d + " cm" + (r.valide ? "" : " (repère calculé)");
 }
