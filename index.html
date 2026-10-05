@@ -325,10 +325,11 @@ const CIBLES = {
 // Cercles : environ 32 cm² par part, calculé à partir de cette table.
 // Cadre carré d'entremets : 8 personnes = 16 × 16 cm, soit 32 cm² par personne, comme le cercle.
 // Cadre de production 57,5 × 37,5 cm : 50 à 60 parts selon l'artisan (parts de 4 cm sur 8 à 10 cm).
-// Contrôle d'un cadre : surface par part entre 28 et 50 cm², plage qui couvre tous ces repères
-// (32 cm² en 8 × 4 ou en 16 × 16 pour 8, environ 48 cm² en 10 × 4 avec la chute).
+// Ça n'a pas à tomber pile (Yoann, 5 oct.) : les contrôles acceptent une marge autour des repères.
+// Cercle ou cadre d'entremets : 26 à 40 cm² par part autour des 32 cm² ; cadre de production : 28 à 50 cm²
+// (32 cm² en 8 × 4, environ 48 cm² en 10 × 4 avec la chute). Couches : 3,5 à 5 cm pour un moule de 4,5 cm.
 // Montage raisonné en hauteur, biscuit environ 1 cm en général.
-const MOULE = {hauteur:4.5, cercles:{6:16, 8:18, 10:20, 12:22}, cm2ParPart:32, carres:{8:16}, cadreProd:{l:57.5, w:37.5, min:50, max:60}, surfacePart:{min:28, max:50}};
+const MOULE = {hauteur:4.5, cercles:{6:16, 8:18, 10:20, 12:22}, cm2ParPart:32, carres:{8:16}, cadreProd:{l:57.5, w:37.5, min:50, max:60}, surfacePart:{entremets:{min:26, max:40}, production:{min:28, max:50}}, couches:{moins:1, plus:0.5}};
 function partDeclaree(m){ const a = num(m.part_longueur_cm), b = num(m.part_largeur_cm); return a > 0 && b > 0 ? {l:Math.max(a,b), w:Math.min(a,b)} : null; }
 const partTxt = p => fmtCm(p.l) + " × " + fmtCm(p.w) + " cm";
 // Côté du cadre carré pour n personnes (32 cm² par personne), arrondi au cm pair
@@ -493,7 +494,7 @@ function auditFiche(f){
         const L = num(m.longueur_cm), W = num(m.largeur_cm);
         if (!L || !W) add("attention", "Dimensions du cadre non indiquées", "Préciser la longueur et la largeur du cadre.");
         else if (parMoule){
-          const s = L*W/parMoule, S = MOULE.surfacePart;
+          const s = L*W/parMoule, S = L*W >= 1500 ? MOULE.surfacePart.production : MOULE.surfacePart.entremets;
           if (s < S.min || s > S.max){
             const rep = L*W >= 1500 ? "cadre 57,5 × 37,5 cm : 50 à 60 parts" : "cadre carré " + carreRepere(Math.round(parMoule)).c + " × " + carreRepere(Math.round(parMoule)).c + " cm pour " + fmt(Math.round(parMoule)) + " personnes";
             add("attention", "Cadre et nombre de parts incohérents", "Cadre " + fmtCm(L) + " × " + fmtCm(W) + " cm pour " + fmt(parMoule) + " parts, soit " + fmt(s) + " cm² par part (part trop " + (s < S.min ? "petite" : "grande") + ") ; repère : " + rep + ", environ 32 cm² par personne (16 × 16 cm pour 8).");
@@ -503,8 +504,11 @@ function auditFiche(f){
         const d = num(m.diametre_cm);
         if (!d) add("attention", "Diamètre du cercle non indiqué", "Préciser le diamètre du cercle.");
         else if (parMoule){
-          const r = cercleRepere(Math.round(parMoule));
-          if (r.valide ? d !== r.d : Math.abs(d - r.d) > 2) add("attention", "Cercle et nombre de parts incohérents", "Cercle Ø " + fmtCm(d) + " cm pour " + fmt(parMoule) + " parts ; repère " + (r.valide ? "validé" : "calculé (32 cm² par part)") + " : Ø " + r.d + " cm.");
+          const s = Math.PI*(d/2)*(d/2)/parMoule, S = MOULE.surfacePart.entremets;
+          if (s < S.min || s > S.max){
+            const r = cercleRepere(Math.round(parMoule));
+            add("attention", "Cercle et nombre de parts incohérents", "Cercle Ø " + fmtCm(d) + " cm pour " + fmt(parMoule) + " parts, soit " + fmt(s) + " cm² par part (part trop " + (s < S.min ? "petite" : "grande") + ") ; repère " + (r.valide ? "validé" : "calculé (32 cm² par part)") + " : Ø " + r.d + " cm.");
+          }
         }
       }
       if (Math.abs(h - MOULE.hauteur) > 0.5) add("attention", "Hauteur de moule non standard", fmtCm(h) + " cm ; hauteur standard 4,5 cm.");
@@ -512,8 +516,8 @@ function auditFiche(f){
       if (!couches.length) add("attention", "Hauteur des couches non indiquée", "Le montage se raisonne en hauteur : préciser l'épaisseur de chaque couche.");
       else {
         const somme = couches.reduce((t,c) => t + num(c.hauteur_cm), 0);
-        if (somme > h + 0.2) add("hors", "Les couches dépassent le moule", fmtCm(somme) + " cm de couches pour un moule de " + fmtCm(h) + " cm.");
-        else if (somme < h - 0.8) add("attention", "Moule incomplètement rempli", fmtCm(somme) + " cm de couches pour un moule de " + fmtCm(h) + " cm.");
+        if (somme > h + MOULE.couches.plus) add("attention", "Les couches dépassent le moule", fmtCm(somme) + " cm de couches pour un moule de " + fmtCm(h) + " cm : il restera de l'appareil, ou il faut réduire une couche.");
+        else if (somme < h - MOULE.couches.moins) add("attention", "Moule incomplètement rempli", fmtCm(somme) + " cm de couches pour un moule de " + fmtCm(h) + " cm.");
         couches.forEach(c => {
           const e = num(c.hauteur_cm);
           if (/biscuit|genoise|dacquoise|joconde|sacher|pain de genes|financier/.test(norm(c.composant)) && (e < 0.5 || e > 2))
