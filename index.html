@@ -323,15 +323,19 @@ const CIBLES = {
 /* ---------- Moules (règle validée par Yoann le 5 oct. 2026) ---------- */
 // Hauteur standard 4,5 cm. Table validée : 6 pers. Ø 16, 8 pers. Ø 18, 10 pers. Ø 20, 12 pers. Ø 22.
 // Cercles : environ 32 cm² par part, calculé à partir de cette table.
-// Cadre de référence 57,5 × 37,5 cm : 50 à 60 parts selon l'artisan, parts de 4 cm de large sur 8 à 10 cm de long
-// (63 parts en 8 × 4 cm, 45 parts en 10 × 4 cm).
+// Cadre carré d'entremets : 8 personnes = 16 × 16 cm, soit 32 cm² par personne, comme le cercle.
+// Cadre de production 57,5 × 37,5 cm : 50 à 60 parts selon l'artisan (parts de 4 cm sur 8 à 10 cm).
+// Contrôle d'un cadre : surface par part entre 28 et 50 cm², plage qui couvre tous ces repères
+// (32 cm² en 8 × 4 ou en 16 × 16 pour 8, environ 48 cm² en 10 × 4 avec la chute).
 // Montage raisonné en hauteur, biscuit environ 1 cm en général.
-const MOULE = {hauteur:4.5, cercles:{6:16, 8:18, 10:20, 12:22}, cm2ParPart:32, partsCadre:[{l:10, w:4}, {l:8, w:4}]};
-// Nombre de parts d'une taille donnée dans un cadre (découpe en grille, dans le meilleur sens)
-function partsCadre(L, W, p){ return Math.max(Math.floor(L/p.l)*Math.floor(W/p.w), Math.floor(L/p.w)*Math.floor(W/p.l)); }
+const MOULE = {hauteur:4.5, cercles:{6:16, 8:18, 10:20, 12:22}, cm2ParPart:32, carres:{8:16}, cadreProd:{l:57.5, w:37.5, min:50, max:60}, surfacePart:{min:28, max:50}};
 function partDeclaree(m){ const a = num(m.part_longueur_cm), b = num(m.part_largeur_cm); return a > 0 && b > 0 ? {l:Math.max(a,b), w:Math.min(a,b)} : null; }
 const partTxt = p => fmtCm(p.l) + " × " + fmtCm(p.w) + " cm";
-const partStandard = p => Math.abs(p.w - 4) <= 0.25 && p.l >= 8 && p.l <= 10;
+// Côté du cadre carré pour n personnes (32 cm² par personne), arrondi au cm pair
+function carreRepere(n){
+  if (MOULE.carres[n]) return {c: MOULE.carres[n], valide: true};
+  return {c: Math.max(10, Math.round(Math.sqrt(n*MOULE.cm2ParPart)/2)*2), valide: false};
+}
 function cercleRepere(n){
   if (MOULE.cercles[n]) return {d: MOULE.cercles[n], valide: true};
   return {d: Math.max(10, Math.round(Math.sqrt(n*MOULE.cm2ParPart/Math.PI))*2), valide: false};
@@ -488,13 +492,12 @@ function auditFiche(f){
       if (m.forme === "cadre"){
         const L = num(m.longueur_cm), W = num(m.largeur_cm);
         if (!L || !W) add("attention", "Dimensions du cadre non indiquées", "Préciser la longueur et la largeur du cadre.");
-        else {
-          const pd = partDeclaree(m);
-          if (pd && !partStandard(pd)) add("attention", "Taille de part non standard", "Parts de " + partTxt(pd) + " ; tailles retenues : 4 cm de large sur 8 à 10 cm de long.");
-          const reps = (pd ? [pd] : MOULE.partsCadre).map(p => ({p, n: partsCadre(L, W, p)})).filter(r => r.n > 0);
-          if (!reps.length) add("attention", "Cadre trop petit", "Cadre " + fmtCm(L) + " × " + fmtCm(W) + " cm : moins d'une part.");
-          else if (parMoule && !reps.some(r => Math.abs(parMoule - r.n)/r.n <= 0.2))
-            add("attention", "Cadre et nombre de parts incohérents", "Cadre " + fmtCm(L) + " × " + fmtCm(W) + " cm pour " + fmt(parMoule) + " parts ; repère : " + reps.map(r => r.n + " parts de " + partTxt(r.p)).join(" ou ") + ".");
+        else if (parMoule){
+          const s = L*W/parMoule, S = MOULE.surfacePart;
+          if (s < S.min || s > S.max){
+            const rep = L*W >= 1500 ? "cadre 57,5 × 37,5 cm : 50 à 60 parts" : "cadre carré " + carreRepere(Math.round(parMoule)).c + " × " + carreRepere(Math.round(parMoule)).c + " cm pour " + fmt(Math.round(parMoule)) + " personnes";
+            add("attention", "Cadre et nombre de parts incohérents", "Cadre " + fmtCm(L) + " × " + fmtCm(W) + " cm pour " + fmt(parMoule) + " parts, soit " + fmt(s) + " cm² par part (part trop " + (s < S.min ? "petite" : "grande") + ") ; repère : " + rep + ", environ 32 cm² par personne (16 × 16 cm pour 8).");
+          }
         }
       } else {
         const d = num(m.diametre_cm);
@@ -554,15 +557,13 @@ function mouleTxt(m){
 function couchesDe(m){ return m && Array.isArray(m.couches) ? m.couches.filter(c => c && num(c.hauteur_cm) > 0) : []; }
 function couchesTxt(m){ return couchesDe(m).map(c => (c.composant || "?") + " " + fmtCm(num(c.hauteur_cm)) + " cm").join(" · "); }
 // Repère de moule quand le rendement est modifié : mêmes hauteurs de couches, environ 32 cm² par part
-// nBase : parts de la fiche d'origine, pour retrouver la taille de part d'un cadre quand elle n'est pas indiquée
-function mouleAdapte(m, n, nBase){
+function mouleAdapte(m, n){
   const nb = Math.max(1, Math.round(num(m.nombre)) || 1);
   if (m.forme === "cadre"){
-    const L = num(m.longueur_cm), W = num(m.largeur_cm);
-    const proche = (a, b) => Math.abs(partsCadre(L, W, a) - nBase/nb) - Math.abs(partsCadre(L, W, b) - nBase/nb);
-    const p = partDeclaree(m) || (L && W ? MOULE.partsCadre.slice().sort(proche)[0] : MOULE.partsCadre[0]);
-    const parCadre = L && W ? partsCadre(L, W, p) : 0;
-    return "parts de " + partTxt(p) + ", soit " + fmt(n*p.l*p.w) + " cm²" + (parCadre ? ", environ " + fmt(n/parCadre, n % parCadre ? 1 : 0) + " cadre" + (n/parCadre > 1 ? "s" : "") + " de " + fmtCm(L) + " × " + fmtCm(W) + " cm" : "");
+    const P = MOULE.cadreProd;
+    if (n > 24){ const x = n/((P.min + P.max)/2); return "environ " + fmt(x, Number.isInteger(x) ? 0 : 1) + " cadre" + (x >= 2 ? "s" : "") + " 57,5 × 37,5 cm (50 à 60 parts par cadre)"; }
+    const r = carreRepere(Math.max(1, Math.round(n/nb)));
+    return (nb > 1 ? nb + " × " : "") + "cadre carré " + r.c + " × " + r.c + " cm" + (r.valide ? "" : " (repère calculé)");
   }
   const r = cercleRepere(Math.max(1, Math.round(n/nb)));
   return (nb > 1 ? nb + " × " : "") + "cercle Ø " + r.d + " cm" + (r.valide ? "" : " (repère calculé)");
@@ -630,7 +631,7 @@ function render(){
   if (f.moule && typeof f.moule === "object" && !isGla){
     const box = el("div", {class:"moule"}, el("div", {class:"t"}, el("b", {text:"Moule : "}), mouleTxt(f.moule)));
     if (couchesDe(f.moule).length) box.append(el("div", {class:"d", text:"Montage, de la base au sommet : " + couchesTxt(f.moule)}));
-    if (facteur !== 1) box.append(el("div", {class:"d", text:"Pour " + fmt(Math.round(base*facteur)) + " parts : " + mouleAdapte(f.moule, Math.round(base*facteur), base) + ", mêmes hauteurs de couches."}));
+    if (facteur !== 1) box.append(el("div", {class:"d", text:"Pour " + fmt(Math.round(base*facteur)) + " parts : " + mouleAdapte(f.moule, Math.round(base*facteur)) + ", mêmes hauteurs de couches."}));
     compSec.append(box);
   }
   (f.composants||[]).forEach(c => {
@@ -868,7 +869,7 @@ async function exportPdf(){
   text((isGla ? "Glacerie" : "Pâtisserie") + ""+"  ·  Rendement " + fmt(Math.round(base*facteur)) + " " + ((f.rendement&&f.rendement.unite)||""), 10, "normal", 0, [90,107,99]);
   if (f.description) text(f.description, 10, "italic", 0, [90,107,99]);
   if (f.moule && typeof f.moule === "object" && !isGla){
-    text("Moule : " + mouleTxt(f.moule) + (facteur !== 1 ? "  (pour " + fmt(Math.round(base*facteur)) + " parts : " + mouleAdapte(f.moule, Math.round(base*facteur), base) + ")" : ""), 10, "normal", 0, [90,107,99]);
+    text("Moule : " + mouleTxt(f.moule) + (facteur !== 1 ? "  (pour " + fmt(Math.round(base*facteur)) + " parts : " + mouleAdapte(f.moule, Math.round(base*facteur)) + ")" : ""), 10, "normal", 0, [90,107,99]);
     if (couchesDe(f.moule).length) text("Montage, de la base au sommet : " + couchesTxt(f.moule), 10, "normal", 0, [90,107,99]);
   }
   y += 3;
