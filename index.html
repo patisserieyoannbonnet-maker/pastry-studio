@@ -169,12 +169,12 @@ footer{margin-top:28px;color:var(--muted);font-size:13px;text-align:center}
     <form class="atelier" id="form" autocomplete="off">
       <div>
         <label class="lbl" for="demande">Que voulez-vous réaliser ?</label>
-        <textarea id="demande" placeholder="Ex. Entremets chocolat noir et framboise pour 10 personnes, ou sorbet mangue-passion pour vitrine à -12 °C"></textarea>
+        <textarea id="demande" maxlength="2000" placeholder="Ex. Entremets chocolat noir et framboise pour 10 personnes, ou sorbet mangue-passion pour vitrine à -12 °C"></textarea>
         <p class="hint" style="margin-top:6px">Pâtisserie ou glacerie : ToqueLab reconnaît seule le type de recette.</p>
       </div>
       <div>
         <label class="lbl" for="qte">Quantité <span style="text-transform:none;letter-spacing:0;font-weight:400">(facultatif)</span></label>
-        <input type="text" id="qte" placeholder="Ex. 8 parts, 2 kg de mix">
+        <input type="text" id="qte" maxlength="120" placeholder="Ex. 8 parts, 2 kg de mix">
       </div>
       <div>
         <span class="lbl">Contraintes</span>
@@ -632,8 +632,9 @@ $("#explique").addEventListener("change", render);
 document.querySelectorAll("#contraintes .chip").forEach(b => b.addEventListener("click", () => b.setAttribute("aria-pressed", String(b.getAttribute("aria-pressed") !== "true"))));
 
 /* ---------- Génération IA ---------- */
-async function callAI(prompt, opts){
-  const res = await fetch("/api/generate", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({prompt}), signal: opts.signal});
+// La page n'envoie que les champs du formulaire : la consigne de ToqueLab est construite par le serveur (api/generate.js).
+async function callAI(demande, opts){
+  const res = await fetch("/api/generate", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(demande), signal: opts.signal});
   if (!res.ok || !res.body){
     let m = "HTTP " + res.status;
     try { const j = await res.json(); m = (j.error && (j.error.message || j.error)) || m; } catch(e){}
@@ -691,48 +692,13 @@ function parseFiche(text){
   try { return JSON.parse(text.slice(a, b + 1)); } catch(e){ throw {code:"format"}; }
 }
 
-function buildPrompt(){
-  const demande = $("#demande").value.trim();
-  const qte = $("#qte").value.trim();
-  const materiel = $("#materiel").value;
-  const contraintes = [...document.querySelectorAll("#contraintes .chip[aria-pressed=true]")].map(b => b.textContent);
-  return `Tu es un chef pâtissier-glacier et formateur français avec 20 ans d'expérience. Tu construis une fiche technique ORIGINALE, juste techniquement et réalisable en laboratoire.
-
-DEMANDE : ${demande}
-QUANTITÉ SOUHAITÉE : ${qte || "non précisée : choisis un rendement professionnel courant (ex. 8 parts en pâtisserie, 1000 g de mix en glacerie)"}
-NIVEAU : expert, qualité professionnelle. La fiche est un support technique ; le formateur construit lui-même son cours.
-CONTRAINTES : ${contraintes.length ? contraintes.join(", ") : "aucune"}
-MATÉRIEL : ${materiel === "robot" ? "robot cuiseur multifonction : pour chaque étape faite au robot, renseigne temp (ex. \"90 °C\"), vitesse (ex. \"3\") et duree (ex. \"6 min\")" : "laboratoire classique (pas de champs temp/vitesse/duree obligatoires)"}
-
-DOMAINE : détermine toi-même d'après la demande.
-- "glacerie" pour une crème glacée, une glace ou un sorbet (sous_type "creme_glacee" ou "sorbet"). Rendement exprimé en "g de mix".
-- "patisserie" pour tout le reste (y compris un entremets glacé : la partie glacée devient alors un composant). Rendement exprimé en "parts".
-
-RÈGLES :
-- N'utilise jamais de guillemets doubles à l'intérieur des textes ; utilise « » à la place.
-- Reste concis : 5 composants au maximum, étapes courtes, pas de texte superflu, pour que la fiche tienne en une réponse.
-- Pour CHAQUE étape, ajoute "pourquoi" : une phrase courte qui explique la raison technique du geste (chimie, physique, hygiène).
-- Tout en français, poids en grammes (nombres), aucune unité de volume.
-- Pour CHAQUE ingrédient, donne sa composition moyenne réaliste pour 100 g (tables de composition usuelles) : eau, sucres (tous sucres), mg (matières grasses), es (extrait sec total = 100 - eau).
-- En glacerie uniquement, ajoute aussi pour chaque ingrédient : esl (extrait sec lactique non gras : protéines + lactose + minéraux du lait uniquement), pac et pod en points par gramme d'ingrédient, saccharose = 1 (ex. dextrose pac 1.9 pod 0.7 ; sucre inverti pac 1.9 pod 1.3 ; glucose atomisé DE 40 pac 0.8 pod 0.4 ; lait entier pac 0.048 pod 0.008).
-- En glacerie, équilibre le mix : crème glacée sucres totaux lactose compris 20-26 %, MG 6-12 %, ESL 8-12 %, ES 32-42 %, PAC 210-290, POD 150-200 (PAC et POD calculés pour 1000 g) ; sorbet sucres 23-33 %, ES 31-33 % (32 °Brix au réfractomètre), PAC 220-330, POD 200-300. Vérifie tes calculs. La somme des g du mix doit être égale au rendement.
-- Alcool en glacerie : alcool pur (g) = poids de la boisson × % vol × 0,8 ; son PAC vaut 7,4 par g d'alcool pur et il ne compte pas dans l'extrait sec ; il s'ajoute après la pasteurisation, dans le mix refroidi.
-- Sorbet, standard ToqueLab : extrait sec 32 %. Sorbet plein fruit : 55 % de fruit (45 % pour les fruits acides ou à saveur forte : passion, citron, cassis, ananas, banane) ; minimum légal : sorbet 25 % (15 %), plein fruit 45 % (20 %). Structure type pour 1000 g de sorbet plein fruit : purée de fruit 550 g, saccharose environ 200 g, glucose atomisé environ 60 g, sucre inverti environ 20 g, stabilisateur 3 g, eau pour compléter ; ajuste le sucre et l'eau selon le Brix de la purée et indique-le dans le nom de l'ingrédient (ex. « Purée de fraise nature 7 °Brix »). Méthode : stabilisateur mélangé à une partie du sucre, sirop (eau, sucres, stabilisateur) porté à 85 °C minimum puis refroidi rapidement à 4 °C, purée ajoutée à froid, mixer, maturation 4 h minimum à 4 °C, mixer de nouveau, contrôler 32 °Brix au réfractomètre, turbiner, stocker à -18 °C. Si la purée est crue, ne présente pas le mix comme pasteurisé.
-- Sorbet à plusieurs fruits : le Brix du mélange est la moyenne des Brix de chaque fruit pondérée par leur poids ; précise si la purée est nature ou sucrée.
-- En pâtisserie, plusieurs composants si la recette l'exige (fond, insert, mousse, glaçage...).
-- AVANT de répondre, vérifie tout ce qui pourrait faire échouer la recette : surdosage ou sous-dosage (gélifiants, sel, levure, sucre), incohérence entre la demande et la recette, contrainte non respectée, température ou durée de cuisson manquante, ingrédient incompatible avec la congélation ou l'acidité, chiffres faux. Si la demande contient une erreur (dosage irréaliste, association impossible), corrige-la et explique-la dans "corrections" (tableau vide si aucune correction).
-- Toute cuisson doit indiquer une température, une durée INDICATIVE et un indicateur de fin observable (champ "fin" : couleur, texture, température à cœur), car la durée dépend du four.
-- "corrections" : chaque correction est un objet {"element","avant","apres","raison","consequence"}. Ne modifie jamais la demande en silence.
-- "conservation" : n'invente pas de durée. Donne les conditions (froid positif, congélation) et, si tu proposes une durée, écris qu'il s'agit d'une estimation à valider par essai et selon le GBPH.
-- Si deux exigences de la demande sont incompatibles, dis-le dans "corrections" et propose le meilleur compromis au lieu de produire une recette artificiellement cohérente.
-- controles : 3 à 5 points de contrôle technique chiffrés (températures, ratios de gélifiant, ratios clés), avec valeur, cible, statut \"ok\" ou \"attention\" et un detail court.
-- conseils : 2 à 4 conseils techniques de professionnel. erreurs : 2 à 3 erreurs fréquentes avec leur cause.
-
-Réponds UNIQUEMENT avec un objet JSON valide, sans texte autour, au format :
-{"titre":"","type":"patisserie|glacerie","sous_type":"creme_glacee|sorbet (glacerie uniquement)","description":"une phrase","rendement":{"valeur":0,"unite":"parts|g de mix"},"materiel":"${materiel}",
-"composants":[{"nom":"","ingredients":[{"nom":"","g":0,"eau":0,"sucres":0,"mg":0,"es":0,"esl":0,"pac":0,"pod":0}],"etapes":[{"texte":"","pourquoi":"","fin":"(cuissons uniquement)"${materiel === "robot" ? ",\"temp\":\"\",\"vitesse\":\"\",\"duree\":\"\"" : ""}}]}],
-"controles":[{"label":"","valeur":"","cible":"","statut":"ok","detail":""}],
-"corrections":[{"element":"","avant":"","apres":"","raison":"","consequence":""}],"conseils":[""],"erreurs":[""],"conservation":""}`;
+function lireDemande(){
+  return {
+    demande: $("#demande").value.trim(),
+    qte: $("#qte").value.trim(),
+    materiel: $("#materiel").value,
+    contraintes: [...document.querySelectorAll("#contraintes .chip[aria-pressed=true]")].map(b => b.textContent.trim())
+  };
 }
 
 const MSG = {
@@ -741,6 +707,7 @@ const MSG = {
   rate_limited:"Trop de demandes rapprochées. Patientez une minute puis relancez.",
   cancelled:"Génération arrêtée.",
   prompt_too_large:"Demande trop longue : raccourcissez la description.",
+  hors_sujet:"ToqueLab construit uniquement des recettes de pâtisserie, de viennoiserie, de chocolaterie, de confiserie et de glacerie. Reformulez la demande.",
 };
 
 $("#form").addEventListener("submit", async ev => {
@@ -761,8 +728,9 @@ $("#form").addEventListener("submit", async ev => {
     if (sec >= 285){ timedOut = true; ctl.abort(); }
   }, 1000);
   try {
-    const r = await callAI(buildPrompt(), {signal: ctl.signal, onText: (n, th) => { written = n; thinking = th; }});
+    const r = await callAI(lireDemande(), {signal: ctl.signal, onText: (n, th) => { written = n; thinking = th; }});
     const data = parseFiche(r.text);
+    if (data && data.hors_sujet) throw {code:"hors_sujet"};
     if (!data || !Array.isArray(data.composants) || !data.composants.length) throw {code:"format"};
     data.demande = $("#demande").value.trim(); data.qteDemandee = $("#qte").value.trim();
     data.contraintes = [...document.querySelectorAll("#contraintes .chip[aria-pressed=true]")].map(b => b.textContent);
