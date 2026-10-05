@@ -130,6 +130,8 @@ ol.steps li{padding-left:4px}
 ul.tips{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
 .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
 .note{font-size:13px;color:var(--muted);margin-top:12px}
+.moule{margin-top:14px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--accent-soft)}
+.moule .d{color:var(--muted);font-size:14px;margin-top:4px}
 .saved{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:8px}
 .saved-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .saved h2{font-family:var(--display);font-size:18px;margin:0;letter-spacing:-.01em}
@@ -318,6 +320,16 @@ const CIBLES = {
     {k:"pod", n:"POD (pouvoir sucrant)", u:"", min:200, max:300, lo:80, hi:360, gout:true}]
 };
 
+/* ---------- Moules (règle validée par Yoann le 5 oct. 2026) ---------- */
+// Hauteur standard 4,5 cm. Table validée : 6 pers. Ø 16, 8 pers. Ø 18, 10 pers. Ø 20, 12 pers. Ø 22.
+// Environ 32 cm² par part, calculé à partir de cette table. Cadre de référence : 57,5 × 37,5 cm.
+// Montage raisonné en hauteur, biscuit environ 1 cm en général.
+const MOULE = {hauteur:4.5, cercles:{6:16, 8:18, 10:20, 12:22}, cm2ParPart:32};
+function cercleRepere(n){
+  if (MOULE.cercles[n]) return {d: MOULE.cercles[n], valide: true};
+  return {d: Math.max(10, Math.round(Math.sqrt(n*MOULE.cm2ParPart/Math.PI))*2), valide: false};
+}
+
 /* ---------- État ---------- */
 let fiche = null;
 let isExample = true;
@@ -334,6 +346,7 @@ const el = (tag, attrs={}, ...kids) => {
 };
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const fmt = (n, d=0) => n.toLocaleString("fr-FR", {minimumFractionDigits:d, maximumFractionDigits:d});
+const fmtCm = v => fmt(v, v % 1 ? 1 : 0);
 const fmtG = g => g >= 100 ? fmt(Math.round(g)) : g >= 10 ? fmt(Math.round(g*2)/2, g%1 ? 1 : 0) : fmt(Math.round(g*10)/10, 1);
 
 /* ---------- Calculs ---------- */
@@ -457,6 +470,44 @@ function auditFiche(f){
     }
     CIBLES[f.sous_type === "sorbet" ? "sorbet" : "creme_glacee"].forEach(c => { const s = statut(t[c.k], c); if (s === "hors") add(c.gout ? "attention" : "hors", c.n + " hors cible", fmt(t[c.k], c.u?1:0) + (c.u?" "+c.u:"") + " pour une cible de " + c.min + " à " + c.max + "." + (c.gout ? " Effet sur le goût (plus ou moins sucré), pas sur la tenue." : "")); });
   }
+  // 7. Moule : un gâteau monté se construit à partir du moule (règle validée le 5 oct. 2026)
+  if (f.type !== "glacerie"){
+    const m = f.moule && typeof f.moule === "object" ? f.moule : null;
+    const monte = /entremets|bavarois|charlotte|fraisier|framboisier|trianon|royal chocolat|foret.noire|layer.cake|gateau monte/.test(norm((f.titre||"") + " " + (f.description||"") + " " + (f.demande||"")));
+    if (!m && monte) add("attention", "Moule non indiqué", "Un entremets se construit à partir du moule : cercle ou cadre, hauteur 4,5 cm.");
+    if (m){
+      const parts = num(f.rendement && f.rendement.valeur), nb = Math.max(1, Math.round(num(m.nombre)) || 1), parMoule = parts / nb;
+      const h = num(m.hauteur_cm) || MOULE.hauteur;
+      if (m.forme === "cadre"){
+        const L = num(m.longueur_cm), W = num(m.largeur_cm);
+        if (!L || !W) add("attention", "Dimensions du cadre non indiquées", "Préciser la longueur et la largeur du cadre.");
+        else if (parMoule){
+          const rep = Math.round(L*W/MOULE.cm2ParPart);
+          if (Math.abs(parMoule - rep)/rep > 0.2) add("attention", "Cadre et nombre de parts incohérents", "Cadre " + fmtCm(L) + " × " + fmtCm(W) + " cm pour " + fmt(parMoule) + " parts ; repère environ " + rep + " parts (32 cm² par part, avant parage).");
+        }
+      } else {
+        const d = num(m.diametre_cm);
+        if (!d) add("attention", "Diamètre du cercle non indiqué", "Préciser le diamètre du cercle.");
+        else if (parMoule){
+          const r = cercleRepere(Math.round(parMoule));
+          if (r.valide ? d !== r.d : Math.abs(d - r.d) > 2) add("attention", "Cercle et nombre de parts incohérents", "Cercle Ø " + fmtCm(d) + " cm pour " + fmt(parMoule) + " parts ; repère " + (r.valide ? "validé" : "calculé (32 cm² par part)") + " : Ø " + r.d + " cm.");
+        }
+      }
+      if (Math.abs(h - MOULE.hauteur) > 0.5) add("attention", "Hauteur de moule non standard", fmtCm(h) + " cm ; hauteur standard 4,5 cm.");
+      const couches = couchesDe(m);
+      if (!couches.length) add("attention", "Hauteur des couches non indiquée", "Le montage se raisonne en hauteur : préciser l'épaisseur de chaque couche.");
+      else {
+        const somme = couches.reduce((t,c) => t + num(c.hauteur_cm), 0);
+        if (somme > h + 0.2) add("hors", "Les couches dépassent le moule", fmtCm(somme) + " cm de couches pour un moule de " + fmtCm(h) + " cm.");
+        else if (somme < h - 0.8) add("attention", "Moule incomplètement rempli", fmtCm(somme) + " cm de couches pour un moule de " + fmtCm(h) + " cm.");
+        couches.forEach(c => {
+          const e = num(c.hauteur_cm);
+          if (/biscuit|genoise|dacquoise|joconde|sacher|pain de genes|financier/.test(norm(c.composant)) && (e < 0.5 || e > 2))
+            add("attention", "Épaisseur de biscuit inhabituelle", (c.composant||"Biscuit") + " : " + fmtCm(e) + " cm ; repère environ 1 cm en général.");
+        });
+      }
+    }
+  }
   return out;
 }
 // En glacerie, l'équilibrage est calculé par le code : on n'affiche pas les mêmes chiffres estimés par l'IA,
@@ -480,6 +531,23 @@ function niveauConfiance(f, alertes){
   const valide = comps.every(cp => (cp.ingredients||[]).every(i => i.src === "base"));
   if (valide) return {n:"A", lbl:"Calculé", d:"Compositions issues de la base validée et calculs vérifiés."};
   return {n:"B", lbl:"Adapté", d:"Cohérente et sans alerte, mais les compositions des ingrédients sont estimées et le résultat dépend du matériel et des matières premières. Le niveau A sera possible avec la base Ciqual et les règles validées."};
+}
+
+function mouleTxt(m){
+  if (!m) return "";
+  const nb = Math.round(num(m.nombre)) > 1 ? Math.round(num(m.nombre)) + " × " : "";
+  const h = num(m.hauteur_cm) || MOULE.hauteur;
+  if (m.forme === "cadre") return nb + "cadre " + fmtCm(num(m.longueur_cm)) + " × " + fmtCm(num(m.largeur_cm)) + " cm, hauteur " + fmtCm(h) + " cm";
+  return nb + "cercle Ø " + fmtCm(num(m.diametre_cm)) + " cm, hauteur " + fmtCm(h) + " cm";
+}
+function couchesDe(m){ return m && Array.isArray(m.couches) ? m.couches.filter(c => c && num(c.hauteur_cm) > 0) : []; }
+function couchesTxt(m){ return couchesDe(m).map(c => (c.composant || "?") + " " + fmtCm(num(c.hauteur_cm)) + " cm").join(" · "); }
+// Repère de moule quand le rendement est modifié : mêmes hauteurs de couches, environ 32 cm² par part
+function mouleAdapte(m, n){
+  const nb = Math.max(1, Math.round(num(m.nombre)) || 1);
+  if (m.forme === "cadre") return "surface nécessaire environ " + fmt(Math.round(n*MOULE.cm2ParPart)) + " cm² (32 cm² par part)";
+  const r = cercleRepere(Math.max(1, Math.round(n/nb)));
+  return (nb > 1 ? nb + " × " : "") + "cercle Ø " + r.d + " cm" + (r.valide ? "" : " (repère calculé)");
 }
 
 /* ---------- Rendu ---------- */
@@ -541,6 +609,12 @@ function render(){
   // Composants
   const allIngs = [];
   const compSec = el("section", {class:"blk"}, el("h3", {text:"Recette"}), el("p", {class:"sub", text:"Quantités en grammes, recalculées selon le rendement choisi."}));
+  if (f.moule && typeof f.moule === "object" && !isGla){
+    const box = el("div", {class:"moule"}, el("div", {class:"t"}, el("b", {text:"Moule : "}), mouleTxt(f.moule)));
+    if (couchesDe(f.moule).length) box.append(el("div", {class:"d", text:"Montage, de la base au sommet : " + couchesTxt(f.moule)}));
+    if (facteur !== 1) box.append(el("div", {class:"d", text:"Pour " + fmt(Math.round(base*facteur)) + " parts : " + mouleAdapte(f.moule, Math.round(base*facteur)) + ", mêmes hauteurs de couches."}));
+    compSec.append(box);
+  }
   (f.composants||[]).forEach(c => {
     const ings = (c.ingredients||[]).map(i => ({...i, g:num(i.g)*facteur}));
     allIngs.push(...ings);
@@ -775,6 +849,10 @@ async function exportPdf(){
   const base = num(f.rendement && f.rendement.valeur) || 1;
   text((isGla ? "Glacerie" : "Pâtisserie") + ""+"  ·  Rendement " + fmt(Math.round(base*facteur)) + " " + ((f.rendement&&f.rendement.unite)||""), 10, "normal", 0, [90,107,99]);
   if (f.description) text(f.description, 10, "italic", 0, [90,107,99]);
+  if (f.moule && typeof f.moule === "object" && !isGla){
+    text("Moule : " + mouleTxt(f.moule) + (facteur !== 1 ? "  (pour " + fmt(Math.round(base*facteur)) + " parts : " + mouleAdapte(f.moule, Math.round(base*facteur)) + ")" : ""), 10, "normal", 0, [90,107,99]);
+    if (couchesDe(f.moule).length) text("Montage, de la base au sommet : " + couchesTxt(f.moule), 10, "normal", 0, [90,107,99]);
+  }
   y += 3;
   const all = [];
   (f.composants||[]).forEach(c => {
