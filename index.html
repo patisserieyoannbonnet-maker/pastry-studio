@@ -323,14 +323,15 @@ const CIBLES = {
 /* ---------- Moules (règle validée par Yoann le 5 oct. 2026) ---------- */
 // Hauteur standard 4,5 cm. Table validée : 6 pers. Ø 16, 8 pers. Ø 18, 10 pers. Ø 20, 12 pers. Ø 22.
 // Cercles : environ 32 cm² par part, calculé à partir de cette table.
-// Cadre de référence 57,5 × 37,5 cm, découpé en parts de 10 × 4 cm (45 parts, 5 × 9) ou de 8 × 4 cm (63 parts, 7 × 9).
+// Cadre de référence 57,5 × 37,5 cm : 50 à 60 parts selon l'artisan, parts de 4 cm de large sur 8 à 10 cm de long
+// (63 parts en 8 × 4 cm, 45 parts en 10 × 4 cm).
 // Montage raisonné en hauteur, biscuit environ 1 cm en général.
 const MOULE = {hauteur:4.5, cercles:{6:16, 8:18, 10:20, 12:22}, cm2ParPart:32, partsCadre:[{l:10, w:4}, {l:8, w:4}]};
 // Nombre de parts d'une taille donnée dans un cadre (découpe en grille, dans le meilleur sens)
 function partsCadre(L, W, p){ return Math.max(Math.floor(L/p.l)*Math.floor(W/p.w), Math.floor(L/p.w)*Math.floor(W/p.l)); }
 function partDeclaree(m){ const a = num(m.part_longueur_cm), b = num(m.part_largeur_cm); return a > 0 && b > 0 ? {l:Math.max(a,b), w:Math.min(a,b)} : null; }
 const partTxt = p => fmtCm(p.l) + " × " + fmtCm(p.w) + " cm";
-const partStandard = p => MOULE.partsCadre.some(s => s.l === p.l && s.w === p.w);
+const partStandard = p => Math.abs(p.w - 4) <= 0.25 && p.l >= 8 && p.l <= 10;
 function cercleRepere(n){
   if (MOULE.cercles[n]) return {d: MOULE.cercles[n], valide: true};
   return {d: Math.max(10, Math.round(Math.sqrt(n*MOULE.cm2ParPart/Math.PI))*2), valide: false};
@@ -489,7 +490,7 @@ function auditFiche(f){
         if (!L || !W) add("attention", "Dimensions du cadre non indiquées", "Préciser la longueur et la largeur du cadre.");
         else {
           const pd = partDeclaree(m);
-          if (pd && !partStandard(pd)) add("attention", "Taille de part non standard", "Parts de " + partTxt(pd) + " ; tailles retenues : 10 × 4 cm ou 8 × 4 cm.");
+          if (pd && !partStandard(pd)) add("attention", "Taille de part non standard", "Parts de " + partTxt(pd) + " ; tailles retenues : 4 cm de large sur 8 à 10 cm de long.");
           const reps = (pd ? [pd] : MOULE.partsCadre).map(p => ({p, n: partsCadre(L, W, p)})).filter(r => r.n > 0);
           if (!reps.length) add("attention", "Cadre trop petit", "Cadre " + fmtCm(L) + " × " + fmtCm(W) + " cm : moins d'une part.");
           else if (parMoule && !reps.some(r => Math.abs(parMoule - r.n)/r.n <= 0.2))
