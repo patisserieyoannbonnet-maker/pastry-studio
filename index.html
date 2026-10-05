@@ -329,7 +329,7 @@ const CIBLES = {
 // Cercle ou cadre d'entremets : 26 à 40 cm² par part autour des 32 cm² ; cadre de production : 28 à 50 cm²
 // (32 cm² en 8 × 4, environ 48 cm² en 10 × 4 avec la chute). Couches : 3,5 à 5 cm pour un moule de 4,5 cm.
 // Montage raisonné en hauteur, biscuit environ 1 cm en général.
-const MOULE = {maxParMoule:16, hauteur:4.5, cercles:{6:16, 8:18, 10:20, 12:22}, cm2ParPart:32, carres:{8:16}, cadreProd:{l:57.5, w:37.5, min:50, max:60}, surfacePart:{entremets:{min:26, max:40}, production:{min:28, max:50}}, couches:{moins:1, plus:0.5}};
+const MOULE = {cercleMax:32, hauteur:4.5, cercles:{6:16, 8:18, 10:20, 12:22}, cm2ParPart:32, carres:{8:16}, cadreProd:{l:57.5, w:37.5, min:50, max:60}, surfacePart:{entremets:{min:26, max:40}, production:{min:28, max:50}}, couches:{moins:1, plus:0.5}};
 function partDeclaree(m){ const a = num(m.part_longueur_cm), b = num(m.part_largeur_cm); return a > 0 && b > 0 ? {l:Math.max(a,b), w:Math.min(a,b)} : null; }
 const partTxt = p => fmtCm(p.l) + " × " + fmtCm(p.w) + " cm";
 // Côté du cadre carré pour n personnes (32 cm² par personne), arrondi au cm pair
@@ -511,10 +511,10 @@ function auditFiche(f){
           }
         }
       }
-      if (m.forme !== "cadre" && parMoule > MOULE.maxParMoule) add("attention", "Cercle trop grand pour un seul entremets", "Cercle Ø " + fmtCm(num(m.diametre_cm)) + " cm pour " + fmt(parMoule) + " parts : au-delà de " + MOULE.maxParMoule + " parts, prévoir plusieurs cercles ou un cadre 57,5 × 37,5 cm (50 à 60 parts).");
+      if (m.forme !== "cadre" && num(m.diametre_cm) > MOULE.cercleMax) add("attention", "Cercle trop grand pour un seul entremets", "Cercle Ø " + fmtCm(num(m.diametre_cm)) + " cm : au-delà de Ø " + MOULE.cercleMax + " cm, prévoir plusieurs cercles ou un cadre 57,5 × 37,5 cm (50 à 60 parts).");
       if (facteur !== 1 && parts){
         const n = Math.round(parts*facteur), a = mouleAdapte(m, n, parts);
-        if (!a.un) add("attention", "Un seul moule ne suffit plus pour " + fmt(n) + " parts", a.texte + ".");
+        if (!a.un) add("attention", a.titre + " pour " + fmt(n) + " parts", a.texte + ".");
       }
       if (Math.abs(h - MOULE.hauteur) > 0.5) add("attention", "Hauteur de moule non standard", fmtCm(h) + " cm ; hauteur standard 4,5 cm.");
       const couches = couchesDe(m);
@@ -565,38 +565,40 @@ function mouleTxt(m){
 }
 function couchesDe(m){ return m && Array.isArray(m.couches) ? m.couches.filter(c => c && num(c.hauteur_cm) > 0) : []; }
 function couchesTxt(m){ return couchesDe(m).map(c => (c.composant || "?") + " " + fmtCm(num(c.hauteur_cm)) + " cm").join(" · "); }
-// Moule quand le rendement change. Un seul cercle ou carré jusqu'à 16 parts (au-delà, il devient trop grand) ;
-// sinon plusieurs moules de la taille d'origine, ou le cadre de production (dès 40 parts).
-// À hauteur égale, la quantité suit la SURFACE du moule, pas le nombre de parts : le facteur de recette est
-// donc calculé par la surface (ex. 8 parts Ø 18 → cadre 57,5 × 37,5 : recette × 8,5, et non × 6,25).
+// Moule quand le rendement change. Un seul cercle jusqu'à Ø 32 cm (Yoann, 5 oct.), soit environ 25 personnes ;
+// un seul cadre carré jusqu'à la même surface (28 × 28 cm). Au-delà : plusieurs moules de la taille d'origine,
+// ou le cadre de production dès 40 parts.
+// À hauteur égale, la quantité suit la SURFACE du moule, pas le nombre de parts : quand la surface par part change
+// (cadre de production ↔ entremets), le facteur de recette est calculé par la surface.
+// Renvoie {un, titre, texte} : un = true si les quantités affichées conviennent telles quelles (pas d'alerte).
 const ARRONDI = x => fmt(x, Math.abs(x - Math.round(x)) < 0.05 ? 0 : 1);
 function surfaceMoule(m){ return m.forme === "cadre" ? num(m.longueur_cm)*num(m.largeur_cm) : Math.PI*Math.pow(num(m.diametre_cm)/2, 2); }
 const estProd = m => m.forme === "cadre" && surfaceMoule(m) >= 1500;
+const unSeulMoule = n => cercleRepere(n).d <= MOULE.cercleMax;
+const PLUSIEURS = "Un seul moule ne suffit plus", CHANGER = "Moule à changer", MEME_H = " pour garder la même hauteur";
 function mouleAdapte(m, n, nBase){
   const nb = Math.max(1, Math.round(num(m.nombre)) || 1), parMoule = nBase/nb, P = MOULE.cadreProd, aBase = surfaceMoule(m)*nb;
-  // Jusqu'à 16 parts : un seul cercle (table validée) ou un seul cadre carré (16 × 16 pour 8)
-  if (n <= MOULE.maxParMoule){
+  const L = fmtCm(num(m.longueur_cm)), W = fmtCm(num(m.largeur_cm));
+  // Cadre de production : cadres entiers ; en dessous de sa capacité, un cadre carré ou des carrés 16 × 16
+  if (estProd(m)){
+    if (n >= parMoule*0.9 && n <= parMoule*1.1) return {un: true, texte: "le même cadre " + L + " × " + W + " cm"};
+    if (n > parMoule*1.1){ const k = Math.ceil(n/parMoule - 0.1); return {un: false, titre: PLUSIEURS, texte: k + " cadres " + L + " × " + W + " cm de " + fmt(parMoule) + " parts (" + fmt(k*parMoule) + " parts), recette × " + ARRONDI(k/nb)}; }
+    if (unSeulMoule(n)){ const r = carreRepere(n); return {un: false, titre: CHANGER, texte: "cadre carré " + r.c + " × " + r.c + " cm" + (r.valide ? "" : " (repère calculé)") + ", recette × " + ARRONDI(r.c*r.c/aBase) + MEME_H}; }
+    const k = Math.ceil(n/8);
+    return {un: false, titre: CHANGER, texte: k + " cadres carrés 16 × 16 cm de 8 parts (" + fmt(k*8) + " parts), recette × " + ARRONDI(k*256/aBase) + MEME_H};
+  }
+  // Cercle ou cadre carré d'entremets : un seul moule tant que le cercle ne dépasse pas Ø 32 cm
+  if (unSeulMoule(n)){
     if (m.forme === "cadre"){ const r = carreRepere(n); return {un: true, texte: "cadre carré " + r.c + " × " + r.c + " cm" + (r.valide ? "" : " (repère calculé)")}; }
     const r = cercleRepere(n); return {un: true, texte: "cercle Ø " + r.d + " cm" + (r.valide ? "" : " (repère calculé)")};
   }
-  // Cadre de production : on compte en cadres entiers ; en dessous de sa capacité, des cadres carrés 16 × 16
-  if (estProd(m)){
-    if (n <= parMoule*1.1 && n >= parMoule*0.9) return {un: true, texte: "le même cadre " + fmtCm(num(m.longueur_cm)) + " × " + fmtCm(num(m.largeur_cm)) + " cm"};
-    if (n < parMoule*0.9){
-      const k = Math.ceil(n/8);
-      return {un: false, texte: k + " cadres carrés 16 × 16 cm de 8 parts (" + fmt(k*8) + " parts) : recette × " + ARRONDI(k*256/aBase) + ", pour garder la même hauteur"};
-    }
-    const k = Math.ceil(n/parMoule - 0.1);
-    return {un: false, texte: k + " cadres " + fmtCm(num(m.longueur_cm)) + " × " + fmtCm(num(m.largeur_cm)) + " cm de " + fmt(parMoule) + " parts (" + fmt(k*parMoule) + " parts) : recette × " + ARRONDI(k/nb)};
-  }
-  // Au-delà de 16 parts : plusieurs moules de la taille d'origine, ou le cadre de production dès 40 parts
-  const k = Math.ceil(n/parMoule), nom = m.forme === "cadre" ? "cadres " + fmtCm(num(m.longueur_cm)) + " × " + fmtCm(num(m.largeur_cm)) + " cm" : "cercles Ø " + fmtCm(num(m.diametre_cm)) + " cm";
-  let t = k + " " + nom + " de " + fmt(parMoule) + " parts (" + fmt(k*parMoule) + " parts) : recette × " + ARRONDI(k/nb);
+  const k = Math.ceil(n/parMoule), nom = m.forme === "cadre" ? "cadres " + L + " × " + W + " cm" : "cercles Ø " + fmtCm(num(m.diametre_cm)) + " cm";
+  let t = k + " " + nom + " de " + fmt(parMoule) + " parts (" + fmt(k*parMoule) + " parts), recette × " + ARRONDI(k/nb);
   if (n >= 40 && aBase > 0){
     const c = Math.max(1, Math.ceil(n/P.max));
-    t += " ; ou " + c + " cadre" + (c > 1 ? "s" : "") + " 57,5 × 37,5 cm (50 à 60 parts par cadre) : recette × " + ARRONDI(c*P.l*P.w/aBase) + ", pour garder la même hauteur";
+    t += " ; ou " + c + " cadre" + (c > 1 ? "s" : "") + " 57,5 × 37,5 cm (50 à 60 parts par cadre), recette × " + ARRONDI(c*P.l*P.w/aBase) + MEME_H;
   }
-  return {un: false, texte: t};
+  return {un: false, titre: PLUSIEURS, texte: t};
 }
 
 /* ---------- Rendu ---------- */
@@ -663,7 +665,7 @@ function render(){
     if (couchesDe(f.moule).length) box.append(el("div", {class:"d", text:"Montage, de la base au sommet : " + couchesTxt(f.moule)}));
     if (facteur !== 1){
       const n = Math.round(base*facteur), a = mouleAdapte(f.moule, n, base);
-      box.append(el("div", {class:"d", text: a.un ? "Pour " + fmt(n) + " parts : " + a.texte + ", mêmes hauteurs de couches." : "Pour " + fmt(n) + " parts, un seul moule ne suffit plus : " + a.texte + "."}));
+      box.append(el("div", {class:"d", text: a.un ? "Pour " + fmt(n) + " parts : " + a.texte + ", mêmes hauteurs de couches." : "Pour " + fmt(n) + " parts, " + a.titre.toLowerCase() + " : " + a.texte + "."}));
     }
     compSec.append(box);
   }
