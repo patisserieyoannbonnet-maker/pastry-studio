@@ -15,6 +15,7 @@ const THINKING = { type: "disabled" };
 
 // Ce que la page a le droit d'envoyer
 const LIMITES = { corps: 8000, demande: 2000, qte: 120 };
+const APPAREIL = /^[a-z0-9]{6,24}$/; // identifiant anonyme tiré au hasard par chaque navigateur (historique)
 const CONTRAINTES = ["Sans gluten", "Sans lactose", "Sans œuf", "Moins sucré", "Végétal"];
 const MATERIELS = ["classique", "robot"];
 
@@ -70,8 +71,78 @@ function lireDemande(body) {
   const choisies = Array.isArray(body.contraintes) ? body.contraintes : [];
   const cle = s => String(s).normalize("NFC").trim().toLowerCase();
   const contraintes = CONTRAINTES.filter(c => choisies.some(x => typeof x === "string" && cle(x) === cle(c)));
-  return { demande, qte, materiel, contraintes };
+  const appareil = typeof body.appareil === "string" && APPAREIL.test(body.appareil) ? body.appareil : "";
+  return { demande, qte, materiel, contraintes, appareil };
 }
+
+// ---------- Historique (25 oct. 2026) ----------
+// Chaque demande est enregistrée dans une base Redis (Upstash, reliée au projet dans Vercel > Storage).
+// Sans base reliée, rien n'est enregistré et le site fonctionne comme avant.
+// Données gardées 12 mois : date, demande, quantité, contraintes, matériel, ville approximative, appareil anonyme, fiche, coût.
+const HISTO_DUREE = 365 * 24 * 3600;
+const HISTO_MAX = 2000;
+function baseHisto() {
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  return url && token ? { url: url.replace(/\/$/, ""), token } : null;
+}
+async function redis(commandes) {
+  const b = baseHisto();
+  if (!b) return null;
+  try {
+    const r = await fetch(b.url + "/pipeline", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + b.token, "Content-Type": "application/json" },
+      body: JSON.stringify(commandes),
+      signal: AbortSignal.timeout(3000)
+    });
+    return r.ok ? await r.json() : null;
+  } catch (e) { return null; } // l'historique ne doit jamais bloquer une fiche
+}
+function enregistrer(e, nouveau) {
+  const cmds = [["SET", "tl:e:" + e.id, JSON.stringify(e), "EX", String(HISTO_DUREE)]];
+  if (nouveau) cmds.push(["LPUSH", "tl:ids", e.id], ["LTRIM", "tl:ids", "0", String(HISTO_MAX - 1)]);
+  return redis(cmds);
+}
+function lieu(req) {
+  const dec = v => { try { return decodeURIComponent(v || ""); } catch (e) { return v || ""; } };
+  return [dec(req.headers.get("x-vercel-ip-city")), req.headers.get("x-vercel-ip-country") || ""].filter(Boolean).join(", ");
+}
+
+// Laisse passer la réponse de l'IA vers la page, et en garde une copie pour l'historique.
+function copieHisto(flux, entree, debut) {
+  const dec = new TextDecoder();
+  let buf = "", texte = "", inTok = 0, outTok = 0, stop = null, erreurIA = "";
+  const lire = ligne => {
+    ligne = ligne.trim();
+    if (!ligne.startsWith("data:")) return;
+    let ev; try { ev = JSON.parse(ligne.slice(5).trim()); } catch (e) { return; }
+    if (ev.type === "content_block_delta" && ev.delta && ev.delta.type === "text_delta") texte += ev.delta.text || "";
+    else if (ev.type === "message_start" && ev.message && ev.message.usage) {
+      const u = ev.message.usage; inTok = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
+    } else if (ev.type === "message_delta") {
+      if (ev.delta && ev.delta.stop_reason) stop = ev.delta.stop_reason;
+      if (ev.usage && ev.usage.output_tokens) outTok = ev.usage.output_tokens;
+    } else if (ev.type === "error") erreurIA = (ev.error && ev.error.message) || "Erreur API";
+  };
+  return flux.pipeThrough(new TransformStream({
+    transform(morceau, ctrl) {
+      ctrl.enqueue(morceau);
+      buf += dec.decode(morceau, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) { lire(buf.slice(0, i)); buf = buf.slice(i + 1); }
+    },
+    async flush() {
+      if (buf) lire(buf);
+      const statut = erreurIA ? "erreur" : /"hors_sujet"\s*:\s*true/.test(texte) ? "hors sujet" : stop === "max_tokens" ? "coupée" : stop ? "fiche" : "interrompue";
+      const cout = Math.round((inTok * PRIX.entree + outTok * PRIX.sortie) * 10000) / 10000;
+      await debut;
+      await enregistrer({ ...entree, statut, fin: Date.now(), jetons: { entree: inTok, sortie: outTok }, cout, erreur: erreurIA || undefined, texte }, false);
+    }
+  }));
+}
+// Tarif indicatif claude-sonnet-5 (oct. 2026), en dollars par jeton
+const PRIX = { entree: 2 / 1e6, sortie: 10 / 1e6 };
 
 // La consigne de ToqueLab (construite dans la page jusqu'au 4 oct. 2026).
 // 5 oct. 2026 : règle du moule validée par Yoann (hauteur 4,5 cm, table des cercles, cadre carré 16 × 16 cm pour 8, cadre 57,5 × 37,5 cm de 50 à 60 parts selon l'artisan).
@@ -130,6 +201,14 @@ export default async function handler(req) {
 
   if (!process.env.ANTHROPIC_API_KEY) return erreur("Clé API absente du serveur (variable ANTHROPIC_API_KEY dans Vercel).", 500);
 
+  // Historique : la demande est notée dès le départ (statut « interrompue » si la génération n'arrive pas au bout)
+  const entree = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+    date: Date.now(), demande: d.demande, qte: d.qte, contraintes: d.contraintes, materiel: d.materiel,
+    appareil: d.appareil, lieu: lieu(req), site: (req.headers.get("host") || "").slice(0, 80), statut: "interrompue"
+  };
+  const debut = enregistrer(entree, true);
+
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -148,7 +227,9 @@ export default async function handler(req) {
     const t = await r.text();
     let m = t;
     try { m = JSON.parse(t).error.message; } catch (e) {}
+    await debut;
+    await enregistrer({ ...entree, statut: "erreur", fin: Date.now(), erreur: String(m).slice(0, 300) }, false);
     return erreur(String(m).slice(0, 500), r.status);
   }
-  return new Response(r.body, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
+  return new Response(copieHisto(r.body, entree, debut), { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
 }

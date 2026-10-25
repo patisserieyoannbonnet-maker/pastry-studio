@@ -144,6 +144,15 @@ ul.tips{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
 .saved-list .open small{color:var(--muted);font-size:12px}
 .saved-list .del{font:600 12px var(--body);background:none;border:1px solid transparent;color:var(--muted);border-radius:6px;padding:4px 8px;cursor:pointer;flex:none}
 .saved-list .del.confirm{border-color:var(--bad);color:var(--bad)}
+.histo-login{display:flex;gap:6px;flex-wrap:wrap}
+.histo-login input{flex:1;min-width:140px}
+.histo-resume{font:600 12px var(--mono);color:var(--muted);margin:0}
+.histo-list{max-height:560px}
+.histo-list .open small{display:block;white-space:normal}
+.histo-list .stat{font:600 11px var(--mono);border-radius:5px;padding:1px 5px;margin-right:4px}
+.histo-list .stat.ok{background:var(--ok-soft);color:var(--ok)}
+.histo-list .stat.warn{background:var(--warn-soft);color:var(--warn)}
+.histo-list .stat.bad{background:var(--bad-soft);color:var(--bad)}
 footer{margin-top:28px;color:var(--muted);font-size:13px;text-align:center}
 .spin{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -203,6 +212,18 @@ footer{margin-top:28px;color:var(--muted);font-size:13px;text-align:center}
       <button class="btn2" id="stop" type="button" hidden>Arrêter la génération</button>
       <div class="status" id="status" role="status" aria-live="polite"></div>
       <p class="hint">La génération prend en général 30 à 90 secondes. Les taux d'équilibrage sont recalculés par la page à partir des compositions, pour être vérifiables.</p>
+      <p class="hint">Les demandes et les fiches sont enregistrées pour améliorer ToqueLab (ville approximative, sans nom ni adresse IP), pendant 12 mois au plus.</p>
+      <section class="saved" id="histo" aria-labelledby="histo-h" hidden>
+        <div class="saved-top"><h2 id="histo-h">Historique de tous les utilisateurs</h2><span class="count" id="histo-count"></span></div>
+        <div class="histo-login" id="histo-login">
+          <input type="password" id="histo-mdp" placeholder="Mot de passe" autocomplete="current-password" aria-label="Mot de passe de l'historique">
+          <button type="button" class="btn2" id="histo-go">Afficher</button>
+        </div>
+        <p class="hint" id="histo-msg">Réservé à l'administrateur.</p>
+        <p class="histo-resume" id="histo-resume"></p>
+        <ul class="saved-list histo-list" id="histo-list"></ul>
+        <button type="button" class="btn2" id="histo-plus" hidden>Charger les demandes plus anciennes</button>
+      </section>
       <section class="saved" aria-labelledby="saved-h">
         <div class="saved-top"><h2 id="saved-h">Mes recettes</h2><span class="count" id="saved-count"></span></div>
         <p class="hint" id="saved-msg">Chaque fiche construite est enregistrée ici automatiquement.</p>
@@ -762,7 +783,7 @@ document.querySelectorAll("#contraintes .chip").forEach(b => b.addEventListener(
 /* ---------- Génération IA ---------- */
 // La page n'envoie que les champs du formulaire : la consigne de ToqueLab est construite par le serveur (api/generate.js).
 async function callAI(demande, opts){
-  const res = await fetch("/api/generate", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(demande), signal: opts.signal});
+  const res = await fetch("/api/generate", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(Object.assign({appareil: appareilId()}, demande)), signal: opts.signal});
   if (!res.ok || !res.body){
     let m = "HTTP " + res.status;
     try { const j = await res.json(); m = (j.error && (j.error.message || j.error)) || m; } catch(e){}
@@ -949,6 +970,91 @@ async function exportPdf(){
   catch(e){ st.className = "status err"; st.textContent = "Le PDF n'a pas pu être créé."; }
 }
 
+/* ---------- Identifiant anonyme de ce navigateur (historique) ---------- */
+// Tiré au hasard une fois par navigateur : permet de regrouper les demandes d'un même utilisateur, sans savoir qui il est.
+function appareilId(){
+  try {
+    let a = localStorage.getItem("toquelab_appareil");
+    if (!a || !/^[a-z0-9]{6,24}$/.test(a)){ a = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6); localStorage.setItem("toquelab_appareil", a); }
+    return a;
+  } catch(e){ return ""; }
+}
+
+/* ---------- Historique de tous les utilisateurs (visible avec #historique dans l'adresse) ---------- */
+const HISTO = {mdp:"", entrees:[], total:0, cur:null};
+const STAT_CL = {"fiche":"ok", "hors sujet":"warn", "coupée":"warn", "interrompue":"warn", "erreur":"bad"};
+function ficheDeLHisto(v){
+  if (v.statut !== "fiche" && v.statut !== "coupée") return null;
+  try {
+    const d = parseFiche(v.texte || "");
+    if (!d || d.hors_sujet || !Array.isArray(d.composants) || !d.composants.length) return null;
+    d.demande = v.demande || ""; d.qteDemandee = v.qte || ""; d.contraintes = v.contraintes || [];
+    d.type = (d.type === "glacerie" || d.sous_type === "sorbet" || d.sous_type === "creme_glacee") ? "glacerie" : "patisserie";
+    return d;
+  } catch(e){ return null; }
+}
+const nomAppareil = a => a ? "Appareil " + a.slice(0, 4).toUpperCase() : "Appareil inconnu";
+function renderHisto(){
+  const ul = $("#histo-list"); ul.replaceChildren();
+  const E = HISTO.entrees;
+  $("#histo-count").textContent = HISTO.total ? String(HISTO.total) : "";
+  if (!E.length){ $("#histo-resume").textContent = ""; ul.append(el("li", {style:"border-style:dashed;color:var(--muted);font-size:14px;padding:10px", text:"Aucune demande enregistrée pour l'instant."})); return; }
+  const appareils = new Set(E.map(v => v.appareil || "?"));
+  const cout = E.reduce((t, v) => t + (Number(v.cout) || 0), 0);
+  const fiches = E.filter(v => v.statut === "fiche").length;
+  $("#histo-resume").textContent = E.length + " demandes affichées · " + fiches + " fiches · " + appareils.size + " appareils · coût ≈ " + fmt(cout, 2) + " $";
+  E.forEach(v => {
+    const f = ficheDeLHisto(v);
+    const conf = f ? niveauConfiance(f, auditFiche(f)) : null;
+    const quand = new Date(v.date || 0).toLocaleString("fr-FR", {day:"numeric", month:"short", hour:"2-digit", minute:"2-digit"});
+    const li = el("li", {class: v.id === HISTO.cur ? "cur" : ""});
+    const details = [quand, nomAppareil(v.appareil), v.lieu || "", (v.contraintes || []).join(", "), v.qte || "", v.materiel === "robot" ? "Robot cuiseur" : "", v.cout ? "≈ " + fmt(v.cout, 3) + " $" : ""].filter(Boolean).join(" · ");
+    const open = el("button", {type:"button", class:"open"},
+      el("b", {text: (f && f.titre) || v.demande || "Demande"}),
+      el("small", {}, el("span", {class:"stat " + (STAT_CL[v.statut] || "warn"), text: v.statut + (conf ? " · niveau " + conf.n : "")}), (f && f.titre ? "« " + v.demande + " » · " : "") + details + (v.erreur ? " · " + v.erreur : "")));
+    open.addEventListener("click", () => {
+      HISTO.cur = v.id; renderHisto();
+      if (!f){ const st = $("#status"); st.className = "status err"; st.textContent = "Pas de fiche lisible pour cette demande (" + v.statut + ")."; return; }
+      fiche = JSON.parse(JSON.stringify(f)); isExample = false; facteur = 1; currentId = null; render(); renderSaved();
+      $("#status").className = "status"; $("#status").textContent = "Fiche de l'historique : " + nomAppareil(v.appareil) + ", " + quand + ".";
+      if (matchMedia("(max-width:880px)").matches) $("#fiche").scrollIntoView({block:"start"});
+    });
+    li.append(open); ul.append(li);
+  });
+}
+async function chargerHisto(plus){
+  const msg = $("#histo-msg");
+  if (!HISTO.mdp){ msg.textContent = "Saisissez le mot de passe."; return; }
+  msg.textContent = "Chargement…";
+  try {
+    const r = await fetch("/api/historique?nb=100&depart=" + (plus ? HISTO.entrees.length : 0), {headers:{Authorization:"Bearer " + HISTO.mdp}, cache:"no-store"});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok){
+      msg.textContent = j.error || ("Erreur " + r.status);
+      if (r.status === 401){ HISTO.mdp = ""; try { sessionStorage.removeItem("toquelab_histo"); } catch(e){} $("#histo-login").hidden = false; }
+      return;
+    }
+    try { sessionStorage.setItem("toquelab_histo", HISTO.mdp); } catch(e){}
+    HISTO.entrees = plus ? HISTO.entrees.concat(j.entrees || []) : (j.entrees || []);
+    HISTO.total = j.total || 0;
+    $("#histo-login").hidden = true;
+    msg.textContent = "Cliquez sur une demande pour ouvrir la fiche, avec ses vérifications.";
+    $("#histo-plus").hidden = HISTO.entrees.length >= HISTO.total;
+    renderHisto();
+  } catch(e){ msg.textContent = "Historique injoignable : vérifiez la connexion."; }
+}
+function initHisto(){
+  const on = location.hash === "#historique";
+  $("#histo").hidden = !on;
+  if (!on) return;
+  try { HISTO.mdp = sessionStorage.getItem("toquelab_histo") || ""; } catch(e){}
+  if (HISTO.mdp) chargerHisto(false);
+}
+$("#histo-go").addEventListener("click", () => { HISTO.mdp = $("#histo-mdp").value; $("#histo-mdp").value = ""; chargerHisto(false); });
+$("#histo-mdp").addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); $("#histo-go").click(); } });
+$("#histo-plus").addEventListener("click", () => chargerHisto(true));
+window.addEventListener("hashchange", initHisto);
+
 /* ---------- Mes recettes (sauvegarde dans ce navigateur) ---------- */
 const LS_KEY = "toquelab_fiches_v1";
 let currentId = null, pendingDel = null, savedDocs = [];
@@ -990,6 +1096,7 @@ renderSaved();
 
 fiche = EXEMPLES.patisserie;
 render();
+initHisto();
 })();
 </script>
 
