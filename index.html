@@ -382,13 +382,55 @@ const fmt = (n, d=0) => n.toLocaleString("fr-FR", {minimumFractionDigits:d, maxi
 const fmtCm = v => fmt(v, v % 1 ? 1 : 0);
 const fmtG = g => g >= 100 ? fmt(Math.round(g)) : g >= 10 ? fmt(Math.round(g*2)/2, g%1 ? 1 : 0) : fmt(Math.round(g*10)/10, 1);
 
+/* ---------- PAC et POD de référence (25 oct. 2026) ---------- */
+// Le code ne reprend plus les PAC et POD donnés par l'IA pour les ingrédients courants : le 25 oct., un sorbet
+// framboise était affiché à 961 de PAC (réel environ 360) à cause de valeurs inventées par l'IA.
+// Valeurs en points par gramme d'ingrédient, saccharose = 1.
+const ALCOOL_RE = /\b(rhum|kirsch|cognac|armagnac|calvados|whisky|whiskey|vodka|gin|tequila|mezcal|liqueur|drambuie|cointreau|grand marnier|amaretto|limoncello|baileys|chartreuse|get ?27|pastis|marsala|porto|sake|champagne|vin|biere|eau[- ]de[- ]vie|poire williams|framboise sauvage|alcool|spiritueux|triple sec|curacao|marc|cidre|prosecco|campari|aperol|absinthe|ouzo|sambuca|frangelico|kahlua|malibu|mirabelle|vieille prune)\b/;
+function degreAlcool(n){ const m = n.match(/(\d+(?:[.,]\d+)?)\s*(?:%\s*(?:vol|alc)|°\s*(?:gl|alc)\b|degres? (?:d'?alcool|gl)\b)/); return m ? parseFloat(m[1].replace(",", ".")) : null; }
+function refPacPod(i){
+  const n = norm(i.nom), sucres = num(i.sucres) / 100;
+  const de = (() => { const m = n.match(/\bde\s*(\d{2})\b/); return m ? +m[1] : null; })();
+  // Alcool : PAC 7,4 par g d'alcool pur (densité 0,8), plus les sucres de la boisson
+  const deg = degreAlcool(n);
+  if (deg !== null || ALCOOL_RE.test(n) && !/arome|extrait|sans alcool/.test(n)){
+    const d = deg !== null ? deg : 40;
+    return {pac: d/100*0.8*7.4 + sucres, pod: sucres, src: deg !== null ? "alcool" : "alcool (40 % vol supposé)"};
+  }
+  if (/sucre inverti|trimoline|inverti/.test(n)) return {pac:1.9, pod:1.3, src:"table"};
+  if (/dextrose/.test(n)) return {pac:1.8, pod:0.7, src:"table"};
+  if (/fructose/.test(n)) return {pac:1.9, pod:1.7, src:"table"};
+  if (/glucose/.test(n)){
+    const d = de || 40, sirop = !/atomise|deshydrate|poudre/.test(n);
+    return {pac: d/50*(sirop ? 0.8 : 1), pod: d/100*(sirop ? 0.8 : 1), src:"table"};
+  }
+  if (/maltodextrine/.test(n)){ const d = de || 18; return {pac: d/90, pod: d/200, src:"table"}; }
+  if (/trehalose/.test(n)) return {pac:1, pod:0.45, src:"table"};
+  if (/\bmiel\b/.test(n)) return {pac:1.5, pod:1.3, src:"table"};
+  if (/lactose/.test(n)) return {pac:1, pod:0.16, src:"table"};
+  if (/saccharose|sucre (semoule|blanc|cristal|en poudre|glace)|^sucre\b|sucre de canne|cassonade|vergeoise/.test(n)) return {pac:1, pod:1, src:"table"};
+  if (/stabili|neige|caroube|guar|gomme|pectine|gelatine|agar|inuline|fibre/.test(n)) return {pac:0, pod:0, src:"table"};
+  if (/\beau\b/.test(n) && !/eau[- ]de[- ]vie|coco/.test(n)) return {pac:0, pod:0, src:"table"};
+  // Produits laitiers : le sucre est du lactose
+  if (/\blait\b|lait |creme|yaourt|fromage|mascarpone|beurre(?! de cacao)|\bskyr\b/.test(n) && !/coco|amande|avoine|soja|riz|vegetal|creme de marron/.test(n))
+    return {pac: sucres, pod: sucres*0.16, src:"table"};
+  // Fruits et purées : sucres du fruit (fructose, glucose, saccharose)
+  if (/puree|fruit|framboise|fraise|mangue|passion|citron|orange|cassis|abricot|peche|poire|pomme|banane|ananas|cerise|myrtille|mure|groseille|figue|melon|pasteque|kiwi|litchi|yuzu|pamplemousse|mandarine|coing|rhubarbe|goyave|papaye|prune|raisin|grenade/.test(n))
+    return {pac: sucres*1.7, pod: sucres*1.1, src:"table"};
+  // Autres : valeur de l'IA si elle est plausible, sinon déduite des sucres
+  const pacIA = num(i.pac), podIA = num(i.pod);
+  if (pacIA >= 0 && pacIA <= 2 && podIA >= 0 && podIA <= 2) return {pac: pacIA, pod: podIA, src:"ia"};
+  return {pac: sucres, pod: sucres, src:"corrigé"};
+}
+
 /* ---------- Calculs ---------- */
 function totaux(ings){
   const t = {g:0, eau:0, sucres:0, mg:0, esl:0, es:0, pac:0, pod:0};
   for (const i of ings){
     const g = num(i.g); t.g += g;
     for (const k of ["eau","sucres","mg","esl","es"]) t[k] += g*num(i[k])/100;
-    t.pac += g*num(i.pac); t.pod += g*num(i.pod);
+    const r = refPacPod(i);
+    t.pac += g*r.pac; t.pod += g*r.pod;
   }
   const pct = k => t.g ? t[k]/t.g*100 : 0;
   return {g:t.g, eau:pct("eau"), sucres:pct("sucres"), mg:pct("mg"), esl:pct("esl"), es:pct("es"),
@@ -417,10 +459,18 @@ const INTERDITS = {
   "Sans œuf":{re:/oeuf|jaune|blanc d|blancs/, sauf:/sans oeuf|aquafaba/},
   "Végétal":{re:/gelatine|beurre|\blait\b|lait |creme|oeuf|jaune|blanc d|blancs|miel|mascarpone|fromage/, sauf:/vegetal|coco|amande|avoine|soja|beurre de cacao|creme de marron|agar/},
 };
+function alcoolNonDemande(f){
+  if (!f || !f.demande) return [];
+  const demande = norm(f.demande);
+  if (ALCOOL_RE.test(demande) || /alcool|liqueur|spiritueux|\bvol\b/.test(demande)) return [];
+  return (f.composants||[]).flatMap(c => c.ingredients||[]).filter(i => { const n = norm(i.nom); return (degreAlcool(n) !== null || ALCOOL_RE.test(n)) && !/arome|extrait|sans alcool|vinaigre/.test(n); }).map(i => i.nom);
+}
 function auditFiche(f){
   const out = [], add = (niveau, titre, detail) => out.push({niveau, titre, detail});
   const comps = f.composants || [];
   // 1. Demande du client
+  const alc = alcoolNonDemande(f);
+  if (alc.length) add("hors", "Alcool ajouté sans être demandé", alc.join(", ") + " : la demande ne parle pas d'alcool. Retirer l'ingrédient, ou préciser l'alcool dans la demande (mention « contient de l'alcool » obligatoire, produit déconseillé aux enfants et aux femmes enceintes).");
   const cons = Array.isArray(f.contraintes) ? f.contraintes : [];
   cons.forEach(c => {
     const r = INTERDITS[c]; if (!r) return;
@@ -501,6 +551,8 @@ function auditFiche(f){
       else if (plein && pf < legPF) add("hors", "Dénomination « plein fruit » non conforme", fmt(pf,0) + " % de fruit, minimum " + legPF + " % (Code des pratiques loyales des glaces).");
       else if (plein && pf < std) add("attention", "Part de fruit sous le standard professionnel", fmt(pf,0) + " % de fruit ; standard retenu pour un sorbet plein fruit : " + std + " %" + (acide ? " (fruit acide ou à saveur forte)" : "") + ".");
     }
+    const sansRef = all.filter(i => num(i.g) > 0 && refPacPod(i).src === "corrigé").map(i => i.nom);
+    if (sansRef.length) add("attention", "PAC ou POD de l'IA non plausible", "Valeur remplacée par une estimation tirée des sucres pour : " + sansRef.join(", ") + ".");
     CIBLES[f.sous_type === "sorbet" ? "sorbet" : "creme_glacee"].forEach(c => { const s = statut(t[c.k], c); if (s === "hors") add(c.gout ? "attention" : "hors", c.n + " hors cible", fmt(t[c.k], c.u?1:0) + (c.u?" "+c.u:"") + " pour une cible de " + c.min + " à " + c.max + "." + (c.gout ? " Effet sur le goût (plus ou moins sucré), pas sur la tenue." : "")); });
   }
   // 7. Moule : un gâteau monté se construit à partir du moule (règle validée le 5 oct. 2026)
@@ -910,7 +962,7 @@ async function exportPdf(){
   const f = fiche, isGla = f.type === "glacerie";
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({unit:"mm", format:"a4"});
-  const clean = s => String(s == null ? "" : s).replace(/[–—]/g,"-").replace(/[’]/g,"'").replace(/[≈]/g,"~").replace(/ | /g," ");
+  const clean = s => String(s == null ? "" : s).replace(/[–—]/g,"-").replace(/[’‘]/g,"'").replace(/[“”]/g,'"').replace(/[≈]/g,"~").replace(/→/g,"->").replace(/≤/g,"<=").replace(/≥/g,">=").replace(/×/g,"x").replace(/ | /g," ");
   const W = 210, M = 16; let y = 18;
   const need = h => { if (y + h > 282){ doc.addPage(); y = 18; } };
   const text = (s, size=10, style="normal", indent=0, color=[22,32,28]) => {
