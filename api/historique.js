@@ -22,8 +22,8 @@ export default async function handler(req) {
     await new Promise(r => setTimeout(r, 800)); // freine les essais de mot de passe
     return json({ error: "Mot de passe incorrect." }, 401);
   }
-  const url = (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || "").replace(/\/$/, "");
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  const url = (process.env.KV_REST_API_URL || process.env.STORAGE_KV_REST_API_URL || process.env.STORAGE_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || process.env.STORAGE_UPSTASH_REDIS_REST_URL || "").replace(/\/$/, "");
+  const token = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN || process.env.STORAGE_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || process.env.STORAGE_UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return json({ error: "Aucune base reliée au projet : Vercel > Storage > Upstash (Redis), puis Connect Project." }, 503);
 
   const q = new URL(req.url).searchParams;
